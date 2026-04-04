@@ -1993,7 +1993,11 @@ function closePaymentModal(){
 
 
 async function payWithMP(){
-  if(!_lastOrderId){ closePaymentModal(); return; }
+  const errEl = document.getElementById('mpPayErr');
+  if(!_lastOrderId){
+    errEl.textContent = 'Error: ID de pedido no encontrado. Cerrá y volvé a enviar el pedido.';
+    return;
+  }
   const btn = document.getElementById('mpPayBtn');
   btn.textContent = 'Generando link...';
   btn.disabled = true;
@@ -2006,10 +2010,10 @@ async function payWithMP(){
     if(data.init_point){
       window.location.href = data.init_point;
     } else {
-      throw new Error(data.error || 'Sin link de pago');
+      throw new Error(`HTTP ${resp.status}: ${data.error || 'Sin link de pago'}`);
     }
   } catch(e){
-    document.getElementById('mpPayErr').textContent = 'No se pudo generar el link. Intentá de nuevo.';
+    errEl.textContent = 'Error: ' + e.message;
     btn.textContent = '💳 Pagar con Mercado Pago';
     btn.disabled = false;
   }
