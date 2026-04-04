@@ -1905,7 +1905,7 @@ let _lastOrderId = null; // para el modal de pago
 
 async function sendOrder(){
   const name   = document.getElementById('clientName').value.trim();
-  const address= _selectedAddress.trim();
+  const address= (_selectedAddress||document.getElementById('clientAddress')?.value||'').trim();
 
   if(!name){
     document.getElementById('clientName').style.borderColor='var(--red)';
@@ -1914,9 +1914,8 @@ async function sendOrder(){
     return;
   }
   if(!address){
-    const pac=document.querySelector('gmp-placeautocomplete');
-    if(pac){ pac.style.setProperty('--gmpac-border-color','var(--red)'); }
-    alert('⚠ Seleccioná tu dirección de entrega del autocompletado de Google Maps.');
+    const inp=document.getElementById('clientAddress');
+    if(inp){ inp.style.borderColor='var(--red)'; inp.placeholder='⚠ Ingresá tu dirección'; inp.focus(); }
     return;
   }
   if(!cart.length){ alert('Tu carrito está vacío. Agregá productos desde la pestaña + Agregar.'); cartTab('agregar'); return; }
@@ -2064,27 +2063,21 @@ const DELIVERY_ZONES={
   argentina:{label:'Todo Argentina',sw:null,ne:null}
 };
 let _selectedAddress='';
-async function initAutocomplete(){
-  if(document.querySelector('gmp-placeautocomplete')) return;
+let _autocompleteReady=false;
+function initAutocomplete(){
+  if(_autocompleteReady) return;
   const input=document.getElementById('clientAddress');
-  if(!input) return;
-  try {
-    const {PlaceAutocompleteElement}=await google.maps.importLibrary('places');
-    let zoneKey='caba';
-    try{ const r=await fetch('/api/store/status'); const d=await r.json(); zoneKey=d.config?.deliveryZone||'caba'; }catch(e){}
-    const zone=DELIVERY_ZONES[zoneKey]||DELIVERY_ZONES.caba;
-    const opts={componentRestrictions:{country:'ar'},types:['address']};
-    if(zone.sw) opts.locationRestriction={south:zone.sw.lat,west:zone.sw.lng,north:zone.ne.lat,east:zone.ne.lng};
-    const pac=new PlaceAutocompleteElement(opts);
-    pac.style.width='100%';
-    pac.style.marginBottom='12px';
-    input.parentNode.replaceChild(pac,input);
-    pac.addEventListener('gmp-select',async(e)=>{
-      const place=e.placePrediction.toPlace();
-      await place.fetchFields({fields:['formattedAddress']});
-      _selectedAddress=place.formattedAddress||'';
+  if(!input||typeof google==='undefined') return;
+  try{
+    const opts={componentRestrictions:{country:'ar'},types:['address'],fields:['formatted_address']};
+    const ac=new google.maps.places.Autocomplete(input,opts);
+    ac.addListener('place_changed',()=>{
+      const place=ac.getPlace();
+      _selectedAddress=place.formatted_address||input.value||'';
     });
-  } catch(err){ console.warn('Maps autocomplete error:',err); }
+    input.addEventListener('input',()=>{ _selectedAddress=''; });
+    _autocompleteReady=true;
+  }catch(err){ console.warn('Maps autocomplete error:',err); }
 }
 
 // ══════════════════════════════════════════════════════
@@ -2150,7 +2143,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 
 <!-- Google Maps Places API – reemplazá YOUR_API_KEY con tu clave real -->
 <script
-  src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAiYDjE9vH2KHLzP9AMPSmMmFIVyLYWjTw&libraries=places&v=beta&callback=initAutocomplete&language=es&region=AR"
+  src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAiYDjE9vH2KHLzP9AMPSmMmFIVyLYWjTw&libraries=places&callback=initAutocomplete&language=es&region=AR"
   async defer>
 </script>
 
