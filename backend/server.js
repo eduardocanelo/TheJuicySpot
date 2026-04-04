@@ -265,18 +265,19 @@ app.post('/api/users/:uid/reject', requireSuperAdmin, (req, res) => {
 // ════════════════════════════════════════════════════════
 
 app.post('/api/orders', orderLimiter, (req, res) => {
-  const { order_num, client_name, client_phone, client_address, items, whatsapp_msg } = req.body;
+  const { order_num, client_name, client_phone, client_address, items, whatsapp_msg, payment_method } = req.body;
 
   const name    = sanitizeString(client_name, 100);
   const phone   = sanitizeString(client_phone, 20);
   const address = sanitizeString(client_address, 300);
   const waMsg   = sanitizeString(whatsapp_msg, 2000);
   const oNum    = sanitizeString(order_num, 20);
+  const payMethod = ['mp','transfer'].includes(payment_method) ? payment_method : 'mp';
 
-  if (!name)                                    return res.status(400).json({ error: 'Nombre requerido' });
-  if (!isValidPhone(phone))                     return res.status(400).json({ error: 'Teléfono inválido' });
+  if (!name) return res.status(400).json({ error: 'Nombre requerido' });
+  if (phone && !isValidPhone(phone)) return res.status(400).json({ error: 'Teléfono inválido' });
   if (!Array.isArray(items) || !items.length || items.length > 50)
-                                                return res.status(400).json({ error: 'Items inválidos' });
+    return res.status(400).json({ error: 'Items inválidos' });
 
   // Total calculado por el servidor — no se acepta el del cliente
   const total = calcOrderTotal(items);
@@ -286,11 +287,12 @@ app.post('/api/orders', orderLimiter, (req, res) => {
     const order = db.createOrder({
       order_num:      oNum || '#0001',
       client_name:    name,
-      client_phone:   normalizePhone(phone),
+      client_phone:   phone ? normalizePhone(phone) : '',
       client_address: address,
       items_json:     JSON.stringify(items),
       total,
-      whatsapp_msg:   waMsg
+      whatsapp_msg:   waMsg,
+      payment_method: payMethod
     });
     broadcast('new_order', order);
     res.json({ ok: true, id: order.id, total });

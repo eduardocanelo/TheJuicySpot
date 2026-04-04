@@ -1110,6 +1110,9 @@ function renderCard(o, color, flash) {
     ${o.client_address ? `<div class="card-address">📍 ${esc(o.client_address)}</div>` : ''}
     <div class="card-items">${esc(itemsText)}</div>
     <div class="card-total">${fmtPesos(o.total)}</div>
+    <div style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-top:4px;padding:3px 7px;border-radius:3px;display:inline-block;${o.payment_method==='transfer'?'background:rgba(212,146,10,.15);color:#D4920A;':'background:rgba(0,158,227,.12);color:#009ee3;'}">
+      ${o.payment_method==='transfer'?'🏦 Transferencia':'🔵 Mercado Pago'}
+    </div>
     <div class="card-actions">
       ${hasNext ? `<button class="btn-next" onclick="setStatus(${o.id},'${STATUS_META[sIdx+1].key}')">→ ${STATUS_META[sIdx+1].label}</button>` : ''}
       ${isEnCamino ? `<button class="btn-wa" onclick="window.open('https://wa.me/${waPhone}?text=${waMsg}','_blank')">💬 Notificar cliente</button>` : ''}

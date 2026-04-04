@@ -123,6 +123,7 @@ function createOrder(data) {
     client_address: data.client_address || '',
     items_json:     data.items_json,
     total:          data.total,
+    payment_method: data.payment_method || 'mp',
     status:         'recibido',
     paid_at:        null,   // se setea al confirmar pago
     whatsapp_msg:   data.whatsapp_msg || '',

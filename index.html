@@ -1964,7 +1964,7 @@ async function sendOrder(){
       body: JSON.stringify({
         order_num: fmtOrderNum(orderNum), client_name: name,
         client_phone: '', client_address: address,
-        items: cart, total, whatsapp_msg: msg
+        items: cart, total, whatsapp_msg: msg, payment_method: pm
       })
     });
     const data = await resp.json();
