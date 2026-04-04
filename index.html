@@ -1914,6 +1914,7 @@ async function sendOrder(){
   const _inp   = document.getElementById('clientAddress');
   const name   = nameEl?.value?.trim() || '';
   const address= (_selectedAddress||_inp?.value||'').trim();
+  const pm     = _paymentMethod;
 
   if(!name){
     if(nameEl){ nameEl.style.borderColor='var(--red)'; nameEl.placeholder='⚠ Ingresá tu nombre'; nameEl.focus(); }
@@ -1976,7 +1977,7 @@ async function sendOrder(){
   cart=[]; saveCart(); renderCart(); _selectedAddress='';
   if(nameEl) nameEl.value='';
   if(_inp)   _inp.value='';
-  const pm=_paymentMethod; _paymentMethod=''; selectPayment('');
+  _paymentMethod=''; selectPayment('');
   updateOrderNumDisplay();
 
   // 4. Según forma de pago
