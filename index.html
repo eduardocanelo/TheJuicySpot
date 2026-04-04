@@ -2057,21 +2057,33 @@ function showTab(id,btn){
 // ══════════════════════════════════════════════════════
 //  GOOGLE MAPS AUTOCOMPLETE (Buenos Aires)
 // ══════════════════════════════════════════════════════
-function initAutocomplete(){
+async function initAutocomplete(){
   const input=document.getElementById('clientAddress');
-  if(!input||typeof google==='undefined') return;
-  const ac=new google.maps.places.Autocomplete(input,{
-    componentRestrictions:{country:'ar'},
-    bounds:new google.maps.LatLngBounds(
-      new google.maps.LatLng(-34.7050,-58.5312),
-      new google.maps.LatLng(-34.5265,-58.3350)
-    ),
-    strictBounds:false,types:['address'],fields:['formatted_address']
-  });
-  ac.addListener('place_changed',()=>{
-    const p=ac.getPlace();
-    if(p.formatted_address) input.value=p.formatted_address;
-  });
+  if(!input) return;
+  try {
+    const {PlaceAutocompleteElement}=await google.maps.importLibrary('places');
+    const pac=new PlaceAutocompleteElement({
+      componentRestrictions:{country:'ar'},
+      types:['address']
+    });
+    // Copiar estilos del input original
+    pac.style.cssText=input.style.cssText;
+    pac.style.width='100%';
+    pac.style.marginBottom='12px';
+    input.parentNode.replaceChild(pac,input);
+    pac.addEventListener('gmp-select',async(e)=>{
+      const place=e.placePrediction.toPlace();
+      await place.fetchFields({fields:['formattedAddress']});
+      // Restaurar input con el valor seleccionado
+      const newInput=document.createElement('input');
+      newInput.id='clientAddress';
+      newInput.value=place.formattedAddress||'';
+      newInput.placeholder='Dirección de entrega *';
+      newInput.style.cssText='width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(212,146,10,.2);color:var(--white);font-family:Barlow,sans-serif;font-size:14px;padding:10px 14px;border-radius:2px;margin-bottom:12px;outline:none;';
+      pac.parentNode.replaceChild(newInput,pac);
+      initAutocomplete();
+    });
+  } catch(err){ console.warn('Maps autocomplete error:',err); }
 }
 
 // ══════════════════════════════════════════════════════
@@ -2137,7 +2149,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 
 <!-- Google Maps Places API – reemplazá YOUR_API_KEY con tu clave real -->
 <script
-  src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAiYDjE9vH2KHLzP9AMPSmMmFIVyLYWjTw&libraries=places&callback=initAutocomplete&language=es&region=AR"
+  src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAiYDjE9vH2KHLzP9AMPSmMmFIVyLYWjTw&libraries=places&v=beta&callback=initAutocomplete&language=es&region=AR"
   async defer>
 </script>
 
