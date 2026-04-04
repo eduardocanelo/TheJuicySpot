@@ -273,7 +273,12 @@ header {
     border-top: 2px dashed #000;
     margin-top: 6mm;
     padding-top: 4mm;
-    page-break-before: auto;
+    page-break-before: avoid;
+    break-before: avoid;
+  }
+  #printArea {
+    page-break-inside: avoid;
+    break-inside: avoid;
   }
   #printArea .com-title {
     text-align: center;
