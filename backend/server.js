@@ -13,7 +13,10 @@ const mpClient = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKE
 // ── Firebase Admin ────────────────────────────────────────
 const admin = require('firebase-admin');
 let _fbCredential;
-if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+if (process.env.FIREBASE_SERVICE_ACCOUNT_B64) {
+  const sa = JSON.parse(Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_B64, 'base64').toString('utf-8'));
+  _fbCredential = admin.credential.cert(sa);
+} else if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
   _fbCredential = admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON));
 } else {
   _fbCredential = admin.credential.cert(require('./firebase-service-account.json'));
