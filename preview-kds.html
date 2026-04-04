@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Preview — Vista Cola (KDS)</title>
+<style>
+:root {
+  --dark:  #0e0a04;
+  --card:  #1a1108;
+  --gold:  #D4920A;
+  --cream: #F5F0E6;
+  --red:   #B01C1C;
+  --s-recibido:    #4A90A4;
+  --s-pago:        #D4920A;
+  --s-prep:        #E07A2F;
+  --s-camino:      #3A9E5F;
+  --s-entregado:   #555;
+  --s-cancelado:   #8B1A1A;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { background: var(--dark); color: var(--cream); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
+
+/* ── HEADER ── */
+header {
+  background: rgba(14,10,4,.97); border-bottom: 2px solid var(--gold);
+  padding: 0 16px; height: 50px;
+  display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 100;
+}
+.h-title { font-size: 15px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--gold); }
+.h-badge { background: rgba(212,146,10,.15); border: 1px solid rgba(212,146,10,.3); color: var(--gold);
+  padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; }
+
+/* ── FILTER BAR ── */
+.filter-bar {
+  display: flex; gap: 8px; padding: 12px 12px 8px; overflow-x: auto;
+  scrollbar-width: none; background: rgba(0,0,0,.3); border-bottom: 1px solid rgba(255,255,255,.05);
+}
+.filter-bar::-webkit-scrollbar { display: none; }
+.filter-pill {
+  flex-shrink: 0; padding: 6px 14px; border-radius: 20px; border: 1px solid;
+  font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+  cursor: pointer; transition: all .2s;
+}
+.filter-pill.active { background: rgba(212,146,10,.15); border-color: var(--gold); color: var(--gold); }
+.filter-pill:not(.active) { border-color: rgba(255,255,255,.1); color: rgba(245,240,230,.35); }
+
+/* ── QUEUE LIST ── */
+.queue { padding: 10px 12px 80px; display: flex; flex-direction: column; gap: 10px; }
+
+/* ── ORDER CARD ── */
+.order-card {
+  background: var(--card); border-radius: 8px;
+  border-left: 4px solid var(--status-color);
+  padding: 14px 14px 12px;
+  position: relative;
+}
+.card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.card-left { display: flex; align-items: center; gap: 10px; }
+.order-num { font-size: 20px; font-weight: 800; color: var(--gold); letter-spacing: 1px; }
+.status-badge {
+  background: var(--status-color); color: #fff;
+  font-size: 9px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase;
+  padding: 3px 8px; border-radius: 20px; opacity: .9;
+}
+.elapsed {
+  font-size: 13px; font-weight: 700; color: rgba(245,240,230,.5);
+  font-variant-numeric: tabular-nums;
+}
+.elapsed.urgent { color: #e05252; }
+
+.client-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.client-name { font-size: 15px; font-weight: 600; }
+.payment-badge {
+  font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 10px;
+  background: rgba(255,255,255,.06); color: rgba(245,240,230,.5); letter-spacing: 1px;
+}
+
+.items-list { font-size: 12px; color: rgba(245,240,230,.55); line-height: 1.6; margin-bottom: 10px; }
+.items-list strong { color: rgba(245,240,230,.8); }
+
+.card-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.total { font-size: 17px; font-weight: 700; color: var(--gold); }
+.action-btn {
+  padding: 9px 16px; border-radius: 6px; border: none; cursor: pointer;
+  font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+  transition: opacity .2s; flex-shrink: 0;
+}
+.action-btn:hover { opacity: .85; }
+.btn-primary { background: var(--status-color); color: #fff; }
+.btn-secondary { background: rgba(255,255,255,.06); color: rgba(245,240,230,.6); border: 1px solid rgba(255,255,255,.1); }
+
+/* Delivered dim */
+.order-card.done { opacity: .45; }
+
+/* ── BOTTOM NAV ── */
+.mob-nav {
+  position: fixed; bottom: 0; left: 0; right: 0; height: 58px;
+  background: rgba(14,10,4,.97); border-top: 1px solid rgba(212,146,10,.18);
+  display: flex; align-items: stretch; z-index: 200;
+}
+.mob-nav-btn {
+  flex: 1; background: transparent; border: none; color: rgba(245,240,230,.3);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 3px; cursor: pointer; font-size: 9px; font-weight: 700;
+  letter-spacing: .5px; text-transform: uppercase;
+}
+.mob-nav-btn.active { color: var(--gold); }
+.mob-nav-icon { font-size: 19px; line-height: 1; }
+
+/* ── NOTE BANNER ── */
+.preview-note {
+  background: rgba(212,146,10,.08); border-bottom: 1px solid rgba(212,146,10,.2);
+  padding: 8px 14px; font-size: 11px; color: rgba(245,240,230,.45); text-align: center;
+  letter-spacing: .5px;
+}
+</style>
+</head>
+<body>
+
+<div class="preview-note">
+  ⚠ PREVIEW — Así luciría la vista de Cola/KDS. No es el panel real.
+</div>
+
+<header>
+  <div class="h-title">🍔 JuicySpot</div>
+  <div class="h-badge">5 activos</div>
+</header>
+
+<div class="filter-bar">
+  <div class="filter-pill active">Todos</div>
+  <div class="filter-pill" style="--status-color:var(--s-recibido)">Recibidos</div>
+  <div class="filter-pill" style="--status-color:var(--s-pago)">Pagados</div>
+  <div class="filter-pill" style="--status-color:var(--s-prep)">En cocina</div>
+  <div class="filter-pill" style="--status-color:var(--s-camino)">En camino</div>
+  <div class="filter-pill" style="--status-color:var(--s-entregado)">Entregados</div>
+</div>
+
+<div class="queue">
+
+  <!-- 1. Urgente — en preparación hace mucho -->
+  <div class="order-card" style="--status-color: var(--s-prep)">
+    <div class="card-header">
+      <div class="card-left">
+        <div class="order-num">#0047</div>
+        <div class="status-badge">En cocina</div>
+      </div>
+      <div class="elapsed urgent">⏱ 28 min</div>
+    </div>
+    <div class="client-row">
+      <div class="client-name">Martínez Diego</div>
+      <div class="payment-badge">MP ✓</div>
+    </div>
+    <div class="items-list">
+      <strong>2×</strong> Doble Lucy — Combo &nbsp;·&nbsp; <strong>1×</strong> Papas Adicionales
+    </div>
+    <div class="card-footer">
+      <div class="total">$53.997</div>
+      <div style="display:flex;gap:6px">
+        <button class="action-btn btn-secondary">Cancelar</button>
+        <button class="action-btn btn-primary">En camino →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. En preparación reciente -->
+  <div class="order-card" style="--status-color: var(--s-prep)">
+    <div class="card-header">
+      <div class="card-left">
+        <div class="order-num">#0048</div>
+        <div class="status-badge">En cocina</div>
+      </div>
+      <div class="elapsed">⏱ 11 min</div>
+    </div>
+    <div class="client-row">
+      <div class="client-name">López Carmen</div>
+      <div class="payment-badge">MP ✓</div>
+    </div>
+    <div class="items-list">
+      <strong>1×</strong> Juicy Lucy — Combo &nbsp;·&nbsp; <strong>1×</strong> Capresa — Solo
+    </div>
+    <div class="card-footer">
+      <div class="total">$27.998</div>
+      <div style="display:flex;gap:6px">
+        <button class="action-btn btn-secondary">Cancelar</button>
+        <button class="action-btn btn-primary">En camino →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. Pago confirmado -->
+  <div class="order-card" style="--status-color: var(--s-pago)">
+    <div class="card-header">
+      <div class="card-left">
+        <div class="order-num">#0049</div>
+        <div class="status-badge">Pago</div>
+      </div>
+      <div class="elapsed">⏱ 5 min</div>
+    </div>
+    <div class="client-row">
+      <div class="client-name">García Ana</div>
+      <div class="payment-badge">MP ✓</div>
+    </div>
+    <div class="items-list">
+      <strong>3×</strong> Argenta — Combo &nbsp;·&nbsp; <strong>2×</strong> Coca-Cola Zero
+    </div>
+    <div class="card-footer">
+      <div class="total">$56.997</div>
+      <div style="display:flex;gap:6px">
+        <button class="action-btn btn-secondary">Cancelar</button>
+        <button class="action-btn btn-primary">Preparar →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. En camino -->
+  <div class="order-card" style="--status-color: var(--s-camino)">
+    <div class="card-header">
+      <div class="card-left">
+        <div class="order-num">#0045</div>
+        <div class="status-badge">En camino</div>
+      </div>
+      <div class="elapsed">⏱ 42 min</div>
+    </div>
+    <div class="client-row">
+      <div class="client-name">Rodríguez Juan</div>
+      <div class="payment-badge">MP ✓</div>
+    </div>
+    <div class="items-list">
+      <strong>1×</strong> Combo Familiar Lucy
+    </div>
+    <div class="card-footer">
+      <div class="total">$49.999</div>
+      <div>
+        <button class="action-btn btn-primary">Entregado ✓</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. Recibido, sin pago -->
+  <div class="order-card" style="--status-color: var(--s-recibido)">
+    <div class="card-header">
+      <div class="card-left">
+        <div class="order-num">#0050</div>
+        <div class="status-badge">Recibido</div>
+      </div>
+      <div class="elapsed">⏱ 2 min</div>
+    </div>
+    <div class="client-row">
+      <div class="client-name">Torres Valentina</div>
+      <div class="payment-badge">Transfer</div>
+    </div>
+    <div class="items-list">
+      <strong>2×</strong> Pollo Tzatziki — Combo
+    </div>
+    <div class="card-footer">
+      <div class="total">$33.998</div>
+      <div style="display:flex;gap:6px">
+        <button class="action-btn btn-secondary">Cancelar</button>
+        <button class="action-btn btn-primary">Confirmar pago →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6. Entregado (atenuado) -->
+  <div class="order-card done" style="--status-color: var(--s-entregado)">
+    <div class="card-header">
+      <div class="card-left">
+        <div class="order-num">#0043</div>
+        <div class="status-badge">Entregado</div>
+      </div>
+      <div class="elapsed">✓ hace 1h</div>
+    </div>
+    <div class="client-row">
+      <div class="client-name">Fernández Luis</div>
+      <div class="payment-badge">MP ✓</div>
+    </div>
+    <div class="items-list">
+      <strong>1×</strong> Doble Lucy — Solo
+    </div>
+    <div class="card-footer">
+      <div class="total">$15.999</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Mobile nav -->
+<nav class="mob-nav">
+  <button class="mob-nav-btn active"><span class="mob-nav-icon">🗂️</span>Pedidos</button>
+  <button class="mob-nav-btn"><span class="mob-nav-icon">📊</span>Métricas</button>
+  <button class="mob-nav-btn"><span class="mob-nav-icon">🏷️</span>Precios</button>
+  <button class="mob-nav-btn" style="color:rgba(176,28,28,.7)"><span class="mob-nav-icon">🚪</span>Salir</button>
+</nav>
+
+</body>
+</html>
