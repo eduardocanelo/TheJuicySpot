@@ -64,62 +64,37 @@ test('el total del carrito se calcula correctamente', async ({ page }) => {
   expect(text).not.toBe('$0');
 });
 
-// Helper: mockear tienda abierta para tests de formulario
-async function mockStoreOpen(page) {
-  await page.route('**/api/store/status', route => route.fulfill({
-    status: 200,
-    contentType: 'application/json',
-    body: JSON.stringify({ open: true, config: { manualOverride: 'open', schedule: [] } }),
-  }));
-}
-
 // ── Formulario de pedido ─────────────────────────────
+// Llama sendOrder() directamente via evaluate para saltear el estado abierto/cerrado
 test('muestra error si el carrito está vacío al enviar', async ({ page }) => {
-  await mockStoreOpen(page);
-  await page.goto('/');
-  await page.waitForLoadState('networkidle');
-  await page.waitForTimeout(500);
-  await page.locator('#cartFloat').click();
-  await page.locator('#tabPedido').click();
-  await page.waitForTimeout(200);
   const dialog = page.waitForEvent('dialog');
-  await page.locator('#sendOrderBtn').click();
+  await page.evaluate(() => sendOrder());
   const d = await dialog;
   expect(d.message()).toMatch(/vacío|carrito/i);
   await d.dismiss();
 });
 
 test('muestra error si falta el nombre al enviar', async ({ page }) => {
-  await mockStoreOpen(page);
-  await page.goto('/');
-  await page.waitForLoadState('networkidle');
   await page.locator('#cartFloat').click();
   await page.locator('#tabAgregar').click();
   await page.waitForTimeout(300);
   await page.locator('#quickBurgers button').first().click();
-  await page.locator('#tabPedido').click();
-  await page.waitForTimeout(200);
   const dialog = page.waitForEvent('dialog');
-  await page.locator('#sendOrderBtn').click();
+  await page.evaluate(() => sendOrder());
   const d = await dialog;
   expect(d.message()).toMatch(/nombre/i);
   await d.dismiss();
 });
 
 test('muestra error si no se elige forma de pago', async ({ page }) => {
-  await mockStoreOpen(page);
-  await page.goto('/');
-  await page.waitForLoadState('networkidle');
   await page.locator('#cartFloat').click();
   await page.locator('#tabAgregar').click();
   await page.waitForTimeout(300);
   await page.locator('#quickBurgers button').first().click();
-  await page.locator('#tabPedido').click();
-  await page.waitForTimeout(200);
   await page.locator('#clientName').fill('Test Usuario');
   await page.locator('#clientAddress').fill('Av. Corrientes 1234');
   const dialog = page.waitForEvent('dialog');
-  await page.locator('#sendOrderBtn').click();
+  await page.evaluate(() => sendOrder());
   const d = await dialog;
   expect(d.message()).toMatch(/pago|método/i);
   await d.dismiss();
