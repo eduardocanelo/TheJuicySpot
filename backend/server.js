@@ -17,9 +17,7 @@ if (process.env.FIREBASE_PROJECT_ID) {
   _fbCredential = admin.credential.cert({
     projectId:   process.env.FIREBASE_PROJECT_ID,
     clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-    privateKey:  process.env.FIREBASE_PRIVATE_KEY.replace(/
-/g, '
-')
+    privateKey:  (process.env.FIREBASE_PRIVATE_KEY || '').split(String.fromCharCode(92)+'n').join(String.fromCharCode(10))
   });
 } else {
   _fbCredential = admin.credential.cert(require('./firebase-service-account.json'));
