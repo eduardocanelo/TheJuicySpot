@@ -66,8 +66,6 @@ app.get('/', (req, res) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
   res.sendFile(path.join(__dirname, '../index.html'));
 });
-app.use(express.static(path.join(__dirname, '..'), { index: false }));
-app.use('/admin', express.static(path.join(__dirname, '../admin'), { index: false }));
 app.get('/admin', (req, res) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
   res.sendFile(path.join(__dirname, '../admin/index.html'));
@@ -76,6 +74,8 @@ app.get('/admin/', (req, res) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
   res.sendFile(path.join(__dirname, '../admin/index.html'));
 });
+app.use(express.static(path.join(__dirname, '..'), { index: false }));
+app.use('/admin', express.static(path.join(__dirname, '../admin'), { index: false }));
 
 // API responses never cached by Cloudflare
 app.use('/api/', (req, res, next) => { res.setHeader('Cache-Control','no-store'); next(); });
