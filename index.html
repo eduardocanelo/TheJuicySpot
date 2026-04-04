@@ -1905,7 +1905,11 @@ let _lastOrderId = null; // para el modal de pago
 
 async function sendOrder(){
   const name   = document.getElementById('clientName').value.trim();
-  const address= (_selectedAddress||document.getElementById('clientAddress')?.value||'').trim();
+  const _inp   = document.getElementById('clientAddress');
+  const address= (_selectedAddress||_inp?.value||'').trim();
+  console.log('[JuicySpot] _selectedAddress:', JSON.stringify(_selectedAddress));
+  console.log('[JuicySpot] input.value:', JSON.stringify(_inp?.value));
+  console.log('[JuicySpot] address final:', JSON.stringify(address));
 
   if(!name){
     document.getElementById('clientName').style.borderColor='var(--red)';
