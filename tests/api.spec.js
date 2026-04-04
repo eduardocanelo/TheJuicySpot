@@ -48,8 +48,9 @@ test('GET /api/store/status devuelve estado de la tienda', async () => {
   const res = await api.get('/api/store/status');
   expect(res.status()).toBe(200);
   const data = await res.json();
-  expect(data).toHaveProperty('isOpen');
-  expect(typeof data.isOpen).toBe('boolean');
+  expect(data).toHaveProperty('open');
+  expect(typeof data.open).toBe('boolean');
+  expect(data).toHaveProperty('config');
 });
 
 test('GET /api/orders requiere autenticación', async () => {
@@ -68,8 +69,7 @@ test('POST /api/orders con datos válidos crea el pedido', async () => {
       client_name:    'Test Playwright',
       client_phone:   '1134567890',
       client_address: 'Av. Corrientes 1234, CABA',
-      items_json:     JSON.stringify([{ id:'lucy_solo', name:'Juicy Lucy', sub:'Solo la burger', emoji:'🧀', qty:1, unitPrice:7999, key:'lucy_solo', group:'burger' }]),
-      total:          7999,
+      items:          [{ id:'lucy_solo', name:'Juicy Lucy', sub:'Solo la burger', emoji:'🧀', qty:1, unitPrice:7999, key:'lucy_solo', group:'burger' }],
       payment_method: 'transfer',
       order_num:      '#TEST',
       whatsapp_msg:   'Test',
