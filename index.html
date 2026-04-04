@@ -1415,17 +1415,23 @@ function showTab(id, btn) {
       color:var(--white);font-family:'Barlow',sans-serif;font-size:14px;
       padding:10px 14px;border-radius:2px;margin-bottom:12px;outline:none;
     " onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor='rgba(212,146,10,.2)'">
-    <div style="
-      background:rgba(212,146,10,.08);border:1px solid rgba(212,146,10,.25);
-      border-radius:3px;padding:10px 14px;margin-bottom:12px;
-      display:flex;gap:10px;align-items:flex-start;
-    ">
-      <span style="font-size:16px;flex-shrink:0;">🔔</span>
-      <span style="font-family:'Barlow',sans-serif;font-size:12px;line-height:1.5;color:rgba(245,240,230,.7);">
-        Tu pedido entra en preparación <strong style="color:var(--gold)">una vez que confirmemos tu pago</strong>.
-        Apenas lo recibamos, te avisamos por WhatsApp y nos ponemos manos a la obra.
-        ¡Gracias por confiar en nosotros! 🍔
-      </span>
+    <!-- Selector de forma de pago -->
+    <div style="margin-bottom:12px;">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:rgba(245,240,230,.4);margin-bottom:7px;">Forma de pago *</div>
+      <div style="display:flex;gap:8px;">
+        <button id="payOptMP" onclick="selectPayment('mp')" style="
+          flex:1;padding:10px 6px;border-radius:3px;border:1px solid rgba(255,255,255,.1);
+          background:transparent;color:rgba(245,240,230,.5);cursor:pointer;
+          font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;
+          letter-spacing:1px;text-transform:uppercase;transition:all .2s;
+        ">🔵 Mercado Pago</button>
+        <button id="payOptTransfer" onclick="selectPayment('transfer')" style="
+          flex:1;padding:10px 6px;border-radius:3px;border:1px solid rgba(255,255,255,.1);
+          background:transparent;color:rgba(245,240,230,.5);cursor:pointer;
+          font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;
+          letter-spacing:1px;text-transform:uppercase;transition:all .2s;
+        ">🏦 Transferencia</button>
+      </div>
     </div>
     <button id="sendOrderBtn" onclick="sendOrder()" style="
       width:100%;background:#25D366;color:#fff;border:none;cursor:pointer;
@@ -1914,8 +1920,13 @@ async function sendOrder(){
     return;
   }
   if(!address){
-    const inp=document.getElementById('clientAddress');
-    if(inp){ inp.style.borderColor='var(--red)'; inp.placeholder='⚠ Ingresá tu dirección'; inp.focus(); }
+    if(_inp){ _inp.style.borderColor='var(--red)'; _inp.placeholder='⚠ Ingresá tu dirección'; _inp.focus(); }
+    return;
+  }
+  if(!_paymentMethod){
+    // Resaltar selector si no eligió forma de pago
+    const sel=document.getElementById('payOptMP')?.parentElement;
+    if(sel){ sel.style.outline='1px solid var(--red)'; sel.style.borderRadius='3px'; setTimeout(()=>sel.style.outline='',2000); }
     return;
   }
   if(!cart.length){ alert('Tu carrito está vacío. Agregá productos desde la pestaña + Agregar.'); cartTab('agregar'); return; }
@@ -1928,6 +1939,7 @@ async function sendOrder(){
   msg+=`📅 ${date}\n`;
   msg+=`👤 *Cliente:* ${name}\n`;
   if(address) msg+=`📍 *Dirección:* ${address}\n`;
+  msg+=`💳 *Pago:* ${_paymentMethod==='mp'?'Mercado Pago':'Transferencia bancaria'}\n`;
   msg+=`\n*─────────────────*\n*DETALLE:*\n`;
   cart.forEach(c=>{
     msg+=`\n• ${c.emoji} *${c.name}* (${c.sub})\n`;
@@ -1935,12 +1947,16 @@ async function sendOrder(){
     msg+=`  ${c.qty} × ${fmt(c.unitPrice)} = *${fmt(c.unitPrice*c.qty)}*\n`;
   });
   msg+=`\n*─────────────────*\n💰 *TOTAL: ${fmt(total)}*\n`;
-  msg+=`\n¡Gracias por elegir Juicy Spot! 🔥`;
+  if(_paymentMethod==='transfer'){
+    msg+=`\n🏦 Para confirmar el pedido necesito el CBU, CVU o alias para hacer la transferencia. ¡Muchas gracias!`;
+  } else {
+    msg+=`\n¡Gracias por elegir Juicy Spot! 🔥`;
+  }
 
   // 1. Abrir WhatsApp inmediatamente (requiere gesto del usuario)
   window.open(`https://wa.me/541164646879?text=${encodeURIComponent(msg)}`,"_blank");
 
-  // 2. Guardar pedido en backend y obtener ID para el pago
+  // 2. Guardar pedido en backend
   try {
     const resp = await fetch('/api/orders', {
       method: 'POST',
@@ -1955,18 +1971,19 @@ async function sendOrder(){
     if(data.ok) _lastOrderId = data.id;
   } catch(e){ _lastOrderId = null; }
 
-  // 3. Limpiar carrito, dirección y nombre
+  // 3. Limpiar carrito, dirección, nombre y pago
   cart=[]; saveCart(); renderCart(); _selectedAddress='';
-  const _nameEl = document.getElementById('clientName');
-  const _addrEl = document.getElementById('clientAddress');
-  if(_nameEl) _nameEl.value='';
-  if(_addrEl) _addrEl.value='';
+  if(nameEl) nameEl.value='';
+  if(_inp)   _inp.value='';
+  const pm=_paymentMethod; _paymentMethod=''; selectPayment('');
   updateOrderNumDisplay();
 
-  // 4. Mostrar modal de pago
-  document.getElementById('mpPayErr').textContent = '';
-  const modal = document.getElementById('paymentModal');
-  modal.style.display = 'flex';
+  // 4. Según forma de pago
+  if(pm==='mp'){
+    document.getElementById('mpPayErr').textContent='';
+    document.getElementById('paymentModal').style.display='flex';
+  }
+  // Transferencia: ya fue todo por WhatsApp, no hace falta modal
 }
 
 function closePaymentModal(){
@@ -1974,11 +1991,6 @@ function closePaymentModal(){
   _lastOrderId = null;
 }
 
-function requestTransfer(){
-  const msg = '¡Hola! Quiero pagar mi pedido por transferencia bancaria. ¿Me podés pasar el CBU, CVU o alias?';
-  window.open(`https://wa.me/541164646879?text=${encodeURIComponent(msg)}`, '_blank');
-  closePaymentModal();
-}
 
 async function payWithMP(){
   if(!_lastOrderId){ closePaymentModal(); return; }
@@ -2072,7 +2084,20 @@ const DELIVERY_ZONES={
   argentina:{label:'Todo Argentina',sw:null,ne:null}
 };
 let _selectedAddress='';
+let _paymentMethod=''; // 'mp' | 'transfer'
 let _autocompleteReady=false;
+
+function selectPayment(method){
+  _paymentMethod=method;
+  [['payOptMP','mp'],['payOptTransfer','transfer']].forEach(([id,val])=>{
+    const btn=document.getElementById(id);
+    if(!btn) return;
+    const on=val===method;
+    btn.style.background   = on?'rgba(212,146,10,.15)':'transparent';
+    btn.style.borderColor  = on?'rgba(212,146,10,.6)':'rgba(255,255,255,.1)';
+    btn.style.color        = on?'var(--gold)':'rgba(245,240,230,.5)';
+  });
+}
 function initAutocomplete(){
   if(_autocompleteReady) return;
   const input=document.getElementById('clientAddress');
@@ -2258,13 +2283,13 @@ document.addEventListener('DOMContentLoaded',()=>{
       Pagar con Mercado Pago
     </button>
 
-    <button onclick="requestTransfer()" style="
-      width:100%;background:transparent;border:1px solid rgba(212,146,10,.35);
-      color:rgba(212,146,10,.8);padding:11px;border-radius:4px;cursor:pointer;
-      font-family:'Barlow Condensed',sans-serif;font-size:14px;letter-spacing:1.5px;
+    <button onclick="closePaymentModal()" style="
+      width:100%;background:transparent;border:1px solid rgba(255,255,255,.1);
+      color:rgba(245,240,230,.4);padding:11px;border-radius:4px;cursor:pointer;
+      font-family:'Barlow Condensed',sans-serif;font-size:13px;letter-spacing:1px;
       text-transform:uppercase;transition:all .2s;
-    " onmouseover="this.style.borderColor='rgba(212,146,10,.7)';this.style.color='var(--gold)'" onmouseout="this.style.borderColor='rgba(212,146,10,.35)';this.style.color='rgba(212,146,10,.8)'">
-      🏦 Pagar con Transferencia Bancaria
+    " onmouseover="this.style.color='rgba(245,240,230,.65)'" onmouseout="this.style.color='rgba(245,240,230,.4)'">
+      Cerrar
     </button>
 
     <div id="mpPayErr" style="color:#e05252;font-size:12px;margin-top:10px;min-height:16px;"></div>
