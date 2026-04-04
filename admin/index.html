@@ -705,6 +705,9 @@ function savePrices() {
 
   <!-- Pedidos -->
   <div class="tab-content active" id="tabPedidos">
+    <div style="padding:8px 16px;text-align:right;border-bottom:1px solid rgba(255,255,255,.06);">
+      <button onclick="resetAllOrders()" style="background:rgba(200,50,50,.15);color:#e07070;border:1px solid rgba(200,50,50,.3);border-radius:6px;padding:5px 14px;font-size:12px;cursor:pointer;">🗑 Borrar todos los pedidos</button>
+    </div>
     <div id="kanbanView">
       <!-- columnas generadas por JS -->
     </div>
@@ -1057,6 +1060,14 @@ function switchTab(tab) {
 // ══════════════════════════════════════════════════════════
 function apiHeaders() {
   return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + TOKEN };
+}
+
+function resetAllOrders() {
+  if (!confirm('¿Borrar TODOS los pedidos y reiniciar el contador a #0001? Esta acción no se puede deshacer.')) return;
+  fetch(`${API}/api/orders/all`, { method: 'DELETE', headers: apiHeaders() })
+    .then(r => r.json())
+    .then(d => { if (d.ok) { showToast('Pedidos borrados'); loadOrders(); } else showToast('Error: ' + JSON.stringify(d)); })
+    .catch(e => showToast('Error: ' + e.message));
 }
 
 function loadOrders() {
