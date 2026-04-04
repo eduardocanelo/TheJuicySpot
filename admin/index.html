@@ -1052,9 +1052,15 @@ function apiHeaders() {
 
 function loadOrders() {
   fetch(`${API}/api/orders`, { headers: apiHeaders() })
-    .then(r => r.json())
-    .then(data => { orders = data; renderKanban(); })
-    .catch(() => showToast('Error al cargar pedidos'));
+    .then(r => {
+      if(!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    })
+    .then(data => {
+      if(!Array.isArray(data)) throw new Error('Respuesta inválida');
+      orders = data; renderKanban();
+    })
+    .catch(e => showToast('Error al cargar pedidos: ' + e.message));
 }
 
 function renderKanban(flashId = null) {

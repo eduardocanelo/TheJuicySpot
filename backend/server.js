@@ -68,6 +68,9 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../index.html'));
 });
 
+// API responses never cached by Cloudflare
+app.use('/api/', (req, res, next) => { res.setHeader('Cache-Control','no-store'); next(); });
+
 // ── Rate limiting ─────────────────────────────────────────
 const orderLimiter = rateLimit({
   windowMs: 10 * 60 * 1000,  // 10 minutos
