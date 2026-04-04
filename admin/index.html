@@ -253,6 +253,8 @@ header {
 .btn-wa:hover    { background: rgba(37,211,102,.25); }
 .btn-print { background: rgba(255,255,255,.05); color: rgba(245,240,230,.5); border: 1px solid rgba(255,255,255,.1); }
 .btn-print:hover { background: rgba(255,255,255,.1); color: var(--cream); }
+.btn-cancel { background: rgba(192,57,43,.12); color: #e07070; border: 1px solid rgba(192,57,43,.25); }
+.btn-cancel:hover { background: rgba(192,57,43,.25); color: #ff9090; }
 
 /* ── COMANDA (área de impresión) ── */
 #printArea { display: none; }
@@ -889,6 +891,7 @@ const STATUS_META = [
   { key: 'en_preparacion', label: 'En Preparación',   color: '#E07A2F' },
   { key: 'en_camino',      label: 'En Camino',        color: '#3A9E5F' },
   { key: 'entregado',      label: 'Entregado',        color: '#888'    },
+  { key: 'cancelado',      label: 'Cancelado',        color: '#C0392B', terminal: true },
 ];
 
 // ══════════════════════════════════════════════════════════
@@ -1140,10 +1143,11 @@ function renderCard(o, color, flash) {
       ${o.payment_method==='transfer'?'🏦 Transferencia':'🔵 Mercado Pago'}
     </div>
     <div class="card-actions">
-      ${hasNext ? `<button class="btn-next" onclick="setStatus(${o.id},'${STATUS_META[sIdx+1].key}')">→ ${STATUS_META[sIdx+1].label}</button>` : ''}
+      ${hasNext && o.status !== 'entregado' && o.status !== 'cancelado' ? `<button class="btn-next" onclick="setStatus(${o.id},'${STATUS_META[sIdx+1].key}')">→ ${STATUS_META[sIdx+1].label}</button>` : ''}
       ${isEnCamino ? `<button class="btn-wa" onclick="window.open('https://wa.me/${waPhone}?text=${waMsg}','_blank')">💬 Notificar cliente</button>` : ''}
       <button class="btn-print" onclick="printComanda(${o.id})">🖨 Imprimir comanda</button>
-      ${hasPrev ? `<button class="btn-prev" onclick="setStatus(${o.id},'${STATUS_META[sIdx-1].key}')">← ${STATUS_META[sIdx-1].label}</button>` : ''}
+      ${hasPrev && o.status !== 'cancelado' ? `<button class="btn-prev" onclick="setStatus(${o.id},'${STATUS_META[sIdx-1].key}')">← ${STATUS_META[sIdx-1].label}</button>` : ''}
+      ${o.status !== 'entregado' && o.status !== 'cancelado' ? `<button class="btn-cancel" onclick="cancelOrder(${o.id})">✕ Cancelar</button>` : ''}
     </div>
   </div>`;
 }
@@ -1195,6 +1199,13 @@ function printComanda(id) {
     copyHTML('★ COPIA CAJA ★') + copyHTML('★ COPIA COCINA ★') + copyHTML('★ COPIA REPARTIDOR ★');
 
   window.print();
+}
+
+function cancelOrder(id) {
+  const o = orders.find(o => o.id === id);
+  if (!o) return;
+  if (!confirm(`¿Cancelar el pedido ${o.order_num} de ${o.client_name}?`)) return;
+  setStatus(id, 'cancelado');
 }
 
 function setStatus(id, status) {

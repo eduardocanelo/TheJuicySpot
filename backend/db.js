@@ -188,7 +188,7 @@ function getMetrics(from, to) {
   const avgTicket    = total ? Math.round(totalRevenue / total) : 0;
   const completed    = orders.filter(o => o.status === 'entregado').length;
 
-  const byStatus = { recibido:0, pago_confirmado:0, en_preparacion:0, en_camino:0, entregado:0 };
+  const byStatus = { recibido:0, pago_confirmado:0, en_preparacion:0, en_camino:0, entregado:0, cancelado:0 };
   orders.forEach(o => { if (byStatus[o.status] !== undefined) byStatus[o.status]++; });
 
   const dayMap = {};
