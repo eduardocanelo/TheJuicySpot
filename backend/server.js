@@ -348,19 +348,60 @@ app.get('/api/orders/stream', requireAuth, (req, res) => {
 //  PRECIOS
 // ════════════════════════════════════════════════════════
 
-// Público: el frontend carga los precios al arrancar
-app.get('/api/prices', (req, res) => {
-  res.json(db.getPrices());
+// Público: catálogo completo (solo activos)
+app.get('/api/catalog', (req, res) => {
+  res.json(db.getCatalog().filter(p => p.active !== false));
 });
 
-// Protegido: operadores editan precios
-app.put('/api/prices', requireAuth, (req, res) => {
-  const patch = req.body;
-  if (typeof patch !== 'object' || Array.isArray(patch))
-    return res.status(400).json({ error: 'Body inválido' });
-  const updated = db.updatePrices(patch);
-  broadcast('prices_update', updated);
-  res.json(updated);
+// Admin: catálogo completo incluyendo inactivos
+app.get('/api/catalog/all', requireAuth, (req, res) => {
+  res.json(db.getCatalog());
+});
+
+// Admin: agregar producto
+app.post('/api/catalog', requireAuth, (req, res) => {
+  const { name, sub, emoji, group, price, active } = req.body;
+  if (!name || typeof price !== 'number' || price < 0)
+    return res.status(400).json({ error: 'name y price (número >= 0) requeridos' });
+  const catalog = db.addCatalogItem({
+    name: String(name).slice(0, 80),
+    sub:   String(sub  || '').slice(0, 120),
+    emoji: String(emoji || '🍔').slice(0, 8),
+    group: ['burger','promo','extra','especial'].includes(group) ? group : 'extra',
+    price: Math.round(price),
+    active: active !== false,
+  });
+  broadcast('catalog_update', db.getCatalog().filter(p => p.active !== false));
+  res.json(catalog);
+});
+
+// Admin: editar producto
+app.put('/api/catalog/:id', requireAuth, (req, res) => {
+  const patch = {};
+  const { name, sub, emoji, group, price, active } = req.body;
+  if (name  !== undefined) patch.name  = String(name).slice(0, 80);
+  if (sub   !== undefined) patch.sub   = String(sub).slice(0, 120);
+  if (emoji !== undefined) patch.emoji = String(emoji).slice(0, 8);
+  if (group !== undefined && ['burger','promo','extra','especial'].includes(group)) patch.group = group;
+  if (typeof price === 'number' && price >= 0) patch.price = Math.round(price);
+  if (active !== undefined) patch.active = !!active;
+  const item = db.updateCatalogItem(req.params.id, patch);
+  if (!item) return res.status(404).json({ error: 'Producto no encontrado' });
+  broadcast('catalog_update', db.getCatalog().filter(p => p.active !== false));
+  res.json(item);
+});
+
+// Admin: eliminar producto
+app.delete('/api/catalog/:id', requireAuth, (req, res) => {
+  const ok = db.deleteCatalogItem(req.params.id);
+  if (!ok) return res.status(404).json({ error: 'Producto no encontrado' });
+  broadcast('catalog_update', db.getCatalog().filter(p => p.active !== false));
+  res.json({ ok: true });
+});
+
+// Compat: precios como mapa plano
+app.get('/api/prices', (req, res) => {
+  res.json(db.getPrices());
 });
 
 app.delete('/api/orders/all', requireAuth, (req, res) => {

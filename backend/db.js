@@ -11,17 +11,29 @@ const DEFAULT_SCHEDULE = [
   { day: 0, from: '18:00', to: '23:00' }, // Domingo
 ];
 
-const DEFAULT_PRICES = {
-  lucy_solo:7999,  lucy_combo:13999, lucy_promo:49999,
-  doble_solo:15999, doble_combo:19999, doble_promo:35999,
-  capresa_solo:9999, capresa_combo:14999, capresa_promo:39999,
-  argenta_solo:11999, argenta_combo:16999, argenta_promo:49999,
-  pollo_solo:11999,  pollo_combo:16999, pollo_promo:49999,
-  coca_zero:3000, coca:3000, sprite_zero:3000, sprite:3000,
-  papas:4900, panceta:2399
-};
-
-const VALID_PRICE_KEYS = new Set(Object.keys(DEFAULT_PRICES));
+const DEFAULT_CATALOG = [
+  { id:'lucy_solo',     name:'Juicy Lucy',           sub:'Solo la burger',             emoji:'🧀', group:'burger', price:7999,  active:true },
+  { id:'lucy_combo',    name:'Juicy Lucy',            sub:'Combo (+ papas + gaseosa)',  emoji:'🧀', group:'burger', price:13999, active:true },
+  { id:'lucy_promo',    name:'Combo Familiar Lucy',   sub:'4 Juicy Lucy completas',     emoji:'🎉', group:'promo',  price:49999, active:true },
+  { id:'doble_solo',    name:'Doble Lucy',            sub:'Solo la burger',             emoji:'🍔', group:'burger', price:15999, active:true },
+  { id:'doble_combo',   name:'Doble Lucy',            sub:'Combo (+ papas + gaseosa)',  emoji:'🍔', group:'burger', price:19999, active:true },
+  { id:'doble_promo',   name:'Combo para Dos',        sub:'2 Dobles Lucy completas',    emoji:'👫', group:'promo',  price:35999, active:true },
+  { id:'capresa_solo',  name:'Capresa',               sub:'Solo la burger',             emoji:'🌿', group:'burger', price:9999,  active:true },
+  { id:'capresa_combo', name:'Capresa',               sub:'Combo (+ papas + gaseosa)',  emoji:'🌿', group:'burger', price:14999, active:true },
+  { id:'capresa_promo', name:'Combo Amigos Capresa',  sub:'3 Capresa completas',        emoji:'👥', group:'promo',  price:39999, active:true },
+  { id:'argenta_solo',  name:'Argenta',               sub:'Solo la burger',             emoji:'🥩', group:'burger', price:11999, active:true },
+  { id:'argenta_combo', name:'Argenta',               sub:'Combo (+ papas + gaseosa)',  emoji:'🥩', group:'burger', price:16999, active:true },
+  { id:'argenta_promo', name:'Promo Argenta x3+1',    sub:'3 combos + Juicy de regalo', emoji:'🎁', group:'promo',  price:49999, active:true },
+  { id:'pollo_solo',    name:'Pollo Tzatziki',        sub:'Solo la burger',             emoji:'🐔', group:'burger', price:11999, active:true },
+  { id:'pollo_combo',   name:'Pollo Tzatziki',        sub:'Combo (+ papas + gaseosa)',  emoji:'🐔', group:'burger', price:16999, active:true },
+  { id:'pollo_promo',   name:'Promo Pollo x3+1',      sub:'3 combos + Juicy de regalo', emoji:'🎁', group:'promo',  price:49999, active:true },
+  { id:'coca_zero',     name:'Coca-Cola Zero',        sub:'Gaseosa · Lata',             emoji:'🥤', group:'extra',  price:3000,  active:true },
+  { id:'coca',          name:'Coca-Cola',             sub:'Gaseosa · Lata',             emoji:'🥤', group:'extra',  price:3000,  active:true },
+  { id:'sprite_zero',   name:'Sprite Zero',           sub:'Gaseosa · Lata',             emoji:'🥤', group:'extra',  price:3000,  active:true },
+  { id:'sprite',        name:'Sprite',                sub:'Gaseosa · Lata',             emoji:'🥤', group:'extra',  price:3000,  active:true },
+  { id:'papas',         name:'Papas Adicionales',     sub:'Ración adicional',           emoji:'🍟', group:'extra',  price:4900,  active:true },
+  { id:'panceta',       name:'Panceta Adicional',     sub:'Ración adicional',           emoji:'🥓', group:'extra',  price:2399,  active:true },
+];
 
 function load() {
   try {
@@ -33,28 +45,78 @@ function load() {
       return data;
     }
   } catch (e) { console.error('Error leyendo DB:', e.message); }
-  return { orders: [], nextId: 1, users: [], store: { manualOverride: 'auto', schedule: DEFAULT_SCHEDULE }, prices: {} };
+  return { orders: [], nextId: 1, users: [], store: { manualOverride: 'auto', schedule: DEFAULT_SCHEDULE }, prices: {}, catalog: null };
 }
 
-// ── Prices ───────────────────────────────────────────────
+// ── Catalog ───────────────────────────────────────────
+function getCatalog() {
+  const db = load();
+  if (db.catalog) return db.catalog;
+  // Migrar precios viejos al catálogo por defecto
+  const oldPrices = db.prices || {};
+  return DEFAULT_CATALOG.map(p => ({
+    ...p,
+    price: oldPrices[p.id] !== undefined ? oldPrices[p.id] : p.price
+  }));
+}
+
+function _saveCatalog(catalog) {
+  const db = load();
+  db.catalog = catalog;
+  save(db);
+  return catalog;
+}
+
+function addCatalogItem(item) {
+  const catalog = getCatalog();
+  const id = (item.name || 'producto')
+    .toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
+    + '_' + Date.now();
+  const newItem = { id, name: '', sub: '', emoji: '🍔', group: 'extra', price: 0, active: true, ...item, id };
+  catalog.push(newItem);
+  _saveCatalog(catalog);
+  return catalog;
+}
+
+function updateCatalogItem(id, patch) {
+  const catalog = getCatalog();
+  const idx = catalog.findIndex(p => p.id === id);
+  if (idx === -1) return null;
+  catalog[idx] = { ...catalog[idx], ...patch };
+  _saveCatalog(catalog);
+  return catalog[idx];
+}
+
+function deleteCatalogItem(id) {
+  const catalog = getCatalog();
+  const idx = catalog.findIndex(p => p.id === id);
+  if (idx === -1) return false;
+  catalog.splice(idx, 1);
+  _saveCatalog(catalog);
+  return true;
+}
+
+// ── Prices (compat) ───────────────────────────────────
 function getPrices() {
-  return { ...DEFAULT_PRICES, ...(load().prices || {}) };
+  const prices = {};
+  getCatalog().forEach(p => { prices[p.id] = p.price; });
+  return prices;
 }
 
 function updatePrices(patch) {
-  const db = load();
-  const safe = {};
+  const catalog = getCatalog();
   for (const [key, val] of Object.entries(patch)) {
-    if (VALID_PRICE_KEYS.has(key) && typeof val === 'number' && val >= 0 && val <= 999999) {
-      safe[key] = Math.round(val);
+    if (typeof val === 'number' && val >= 0 && val <= 9999999) {
+      const idx = catalog.findIndex(p => p.id === key);
+      if (idx !== -1) catalog[idx].price = Math.round(val);
     }
   }
-  db.prices = { ...(db.prices || {}), ...safe };
-  save(db);
-  return { ...DEFAULT_PRICES, ...db.prices };
+  _saveCatalog(catalog);
+  return getPrices();
 }
 
-// ── Store ─────────────────────────────────────────────────
+// ── Store ─────────────────────────────────────────────
 function getStoreConfig() {
   return load().store;
 }
@@ -66,7 +128,7 @@ function updateStoreConfig(patch) {
   return db.store;
 }
 
-// ── Usuarios ─────────────────────────────────────────────
+// ── Usuarios ─────────────────────────────────────────
 function getUser(uid) {
   return load().users.find(u => u.uid === uid) || null;
 }
@@ -125,7 +187,7 @@ function createOrder(data) {
     total:          data.total,
     payment_method: data.payment_method || 'mp',
     status:         'recibido',
-    paid_at:        null,   // se setea al confirmar pago
+    paid_at:        null,
     whatsapp_msg:   data.whatsapp_msg || '',
     created_at:     data._created_at || now,
     updated_at:     now
@@ -161,13 +223,11 @@ function updateStatus(id, status, _paidAt, _mpPaymentId) {
 }
 
 function parseDate(str) {
-  // "03/04/2026, 18:05:00" → "2026-04-03"
   const parts = str.split(',')[0].split('/');
   return `${parts[2]}-${parts[1]}-${parts[0]}`;
 }
 
 function parseDateTime(str) {
-  // "03/04/2026, 18:05:00" → ms timestamp
   if (!str) return null;
   const m = str.match(/(\d{2})\/(\d{2})\/(\d{4}),?\s*(\d{2}):(\d{2}):(\d{2})/);
   if (!m) return null;
@@ -215,24 +275,21 @@ function getMetrics(from, to) {
     .sort((a, b) => b.qty - a.qty)
     .slice(0, 10);
 
-  // Tiempo promedio de entrega (created_at → updated_at de pedidos entregados)
   const deliveredOrders = orders.filter(o => o.status === 'entregado');
   let avgDeliveryMinutes = null;
   if (deliveredOrders.length) {
     const totalMs = deliveredOrders.reduce((sum, o) => {
-      const created  = parseDateTime(o.created_at);
+      const created   = parseDateTime(o.created_at);
       const delivered = parseDateTime(o.updated_at);
       return (created && delivered) ? sum + (delivered - created) : sum;
     }, 0);
     avgDeliveryMinutes = Math.round(totalMs / deliveredOrders.length / 60000);
   }
 
-  // Ingresos confirmados por Mercado Pago (paid_at presente)
   const mpOrders  = orders.filter(o => o.paid_at);
   const mpRevenue = mpOrders.reduce((s, o) => s + o.total, 0);
   const mpCount   = mpOrders.length;
 
-  // Pedidos con pago confirmado que aún no fueron enviados (para la tabla)
   const NOT_SHIPPED = new Set(['recibido', 'pago_confirmado', 'en_preparacion']);
   const pendingShipments = orders
     .filter(o => o.paid_at && NOT_SHIPPED.has(o.status))
@@ -251,4 +308,10 @@ function getMetrics(from, to) {
            avgDeliveryMinutes, mpRevenue, mpCount, pendingShipments };
 }
 
-module.exports = { createOrder, getOrders, resetOrders, updateStatus, getMetrics, getUser, upsertUser, approveUser, getPendingUsers, getAllUsers, getStoreConfig, updateStoreConfig, getPrices, updatePrices, DEFAULT_PRICES };
+module.exports = {
+  createOrder, getOrders, resetOrders, updateStatus, getMetrics,
+  getUser, upsertUser, approveUser, getPendingUsers, getAllUsers,
+  getStoreConfig, updateStoreConfig,
+  getCatalog, addCatalogItem, updateCatalogItem, deleteCatalogItem,
+  getPrices, updatePrices,
+};

@@ -2059,16 +2059,22 @@ function applyPricesToDOM(){
 //  CARGA DE PRECIOS DESDE EL BACKEND
 // ══════════════════════════════════════════════════════
 function loadPricesFromAPI(){
-  fetch('/api/prices')
+  fetch('/api/catalog')
     .then(r=>r.json())
-    .then(data=>{
-      Object.assign(PRICES, data);
+    .then(catalog=>{
+      // Actualizar PRICES
+      catalog.forEach(p=>{ PRICES[p.id]=p.price; });
       try{ localStorage.setItem('js_prices', JSON.stringify(PRICES)); }catch(e){}
+      // Agregar al PRODUCTS los productos nuevos que no estén hardcodeados
+      const existingIds = new Set(PRODUCTS.map(p=>p.id));
+      catalog.forEach(p=>{
+        if(!existingIds.has(p.id)){
+          PRODUCTS.push({ id:p.id, name:p.name, sub:p.sub, emoji:p.emoji, key:p.id, group:p.group||'extra' });
+        }
+      });
       applyPricesToDOM();
     })
-    .catch(()=>{
-      // Sin backend: usar caché de localStorage (ya aplicado al inicializar)
-    });
+    .catch(()=>{});
 }
 
 // ══════════════════════════════════════════════════════
