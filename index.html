@@ -1969,7 +1969,8 @@ async function sendOrder(){
     });
     const data = await resp.json();
     if(data.ok) _lastOrderId = data.id;
-  } catch(e){ _lastOrderId = null; }
+    else alert('[DEBUG] Backend error: ' + JSON.stringify(data));
+  } catch(e){ alert('[DEBUG] Fetch error: ' + e.message); _lastOrderId = null; }
 
   // 3. Limpiar carrito, dirección, nombre y pago
   cart=[]; saveCart(); renderCart(); _selectedAddress='';
