@@ -12,8 +12,9 @@ async function login(page) {
   await page.locator('#loginEmail').fill(EMAIL);
   await page.locator('#loginPassword').fill(PASSWORD);
   await page.locator('#loginSubmitBtn').click();
-  // Esperar a que aparezca el panel principal
-  await expect(page.locator('#adminApp, #mainApp, .tab-btn').first()).toBeVisible({ timeout: 15000 });
+  // Esperar a que el loginScreen desaparezca y el panel sea visible
+  await expect(page.locator('#loginScreen')).toBeHidden({ timeout: 20000 });
+  await expect(page.locator('#btnPedidos')).toBeVisible({ timeout: 10000 });
 }
 
 // ── Login ────────────────────────────────────────────
@@ -29,8 +30,8 @@ test('login con credenciales incorrectas muestra error', async ({ page }) => {
   await page.locator('#loginEmail').fill('noexiste@test.com');
   await page.locator('#loginPassword').fill('wrongpassword');
   await page.locator('#loginSubmitBtn').click();
-  const errEl = page.locator('#loginError, .login-error, [id*="error"]').first();
-  await expect(errEl).toBeVisible({ timeout: 8000 });
+  await expect(page.locator('#loginErr')).toBeVisible({ timeout: 10000 });
+  await expect(page.locator('#loginErr')).not.toBeEmpty();
 });
 
 // Los siguientes tests requieren credenciales válidas
