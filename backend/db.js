@@ -139,6 +139,13 @@ function getOrders() {
   return load().orders;
 }
 
+function resetOrders() {
+  const db = load();
+  db.orders = [];
+  db.nextId = 1;
+  save(db);
+}
+
 function updateStatus(id, status, _paidAt, _mpPaymentId) {
   const db  = load();
   const idx = db.orders.findIndex(o => o.id === id);
@@ -244,4 +251,4 @@ function getMetrics(from, to) {
            avgDeliveryMinutes, mpRevenue, mpCount, pendingShipments };
 }
 
-module.exports = { createOrder, getOrders, updateStatus, getMetrics, getUser, upsertUser, approveUser, getPendingUsers, getAllUsers, getStoreConfig, updateStoreConfig, getPrices, updatePrices, DEFAULT_PRICES };
+module.exports = { createOrder, getOrders, resetOrders, updateStatus, getMetrics, getUser, upsertUser, approveUser, getPendingUsers, getAllUsers, getStoreConfig, updateStoreConfig, getPrices, updatePrices, DEFAULT_PRICES };

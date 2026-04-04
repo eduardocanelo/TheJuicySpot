@@ -363,6 +363,11 @@ app.put('/api/prices', requireAuth, (req, res) => {
   res.json(updated);
 });
 
+app.delete('/api/orders/all', requireAuth, (req, res) => {
+  db.resetOrders();
+  res.json({ ok: true });
+});
+
 // ════════════════════════════════════════════════════════
 //  MERCADO PAGO
 // ════════════════════════════════════════════════════════
