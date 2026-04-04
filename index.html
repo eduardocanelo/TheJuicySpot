@@ -1977,6 +1977,12 @@ function closePaymentModal(){
   _lastOrderId = null;
 }
 
+function requestTransfer(){
+  const msg = '¡Hola! Quiero pagar mi pedido por transferencia bancaria. ¿Me podés pasar el CBU, CVU o alias?';
+  window.open(`https://wa.me/541164646879?text=${encodeURIComponent(msg)}`, '_blank');
+  closePaymentModal();
+}
+
 async function payWithMP(){
   if(!_lastOrderId){ closePaymentModal(); return; }
   const btn = document.getElementById('mpPayBtn');
@@ -2256,13 +2262,13 @@ document.addEventListener('DOMContentLoaded',()=>{
       Pagar con Mercado Pago
     </button>
 
-    <button onclick="closePaymentModal()" style="
-      width:100%;background:transparent;border:1px solid rgba(255,255,255,.1);
-      color:rgba(245,240,230,.45);padding:11px;border-radius:4px;cursor:pointer;
+    <button onclick="requestTransfer()" style="
+      width:100%;background:transparent;border:1px solid rgba(212,146,10,.35);
+      color:rgba(212,146,10,.8);padding:11px;border-radius:4px;cursor:pointer;
       font-family:'Barlow Condensed',sans-serif;font-size:14px;letter-spacing:1.5px;
       text-transform:uppercase;transition:all .2s;
-    " onmouseover="this.style.color='rgba(245,240,230,.7)'" onmouseout="this.style.color='rgba(245,240,230,.45)'">
-      💵 Pago al recibir / Transferencia
+    " onmouseover="this.style.borderColor='rgba(212,146,10,.7)';this.style.color='var(--gold)'" onmouseout="this.style.borderColor='rgba(212,146,10,.35)';this.style.color='rgba(212,146,10,.8)'">
+      🏦 Pagar con Transferencia Bancaria
     </button>
 
     <div id="mpPayErr" style="color:#e05252;font-size:12px;margin-top:10px;min-height:16px;"></div>
