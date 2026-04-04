@@ -1906,18 +1906,11 @@ let _lastOrderId = null; // para el modal de pago
 async function sendOrder(){
   const nameEl = document.getElementById('clientName');
   const _inp   = document.getElementById('clientAddress');
-  console.log('[JuicySpot] clientName el:', nameEl);
-  console.log('[JuicySpot] clientAddress el:', _inp);
-  console.log('[JuicySpot] _selectedAddress:', JSON.stringify(_selectedAddress));
   const name   = nameEl?.value?.trim() || '';
   const address= (_selectedAddress||_inp?.value||'').trim();
-  console.log('[JuicySpot] name:', JSON.stringify(name));
-  console.log('[JuicySpot] address:', JSON.stringify(address));
 
   if(!name){
-    document.getElementById('clientName').style.borderColor='var(--red)';
-    document.getElementById('clientName').placeholder='⚠ Ingresá tu nombre';
-    document.getElementById('clientName').focus();
+    if(nameEl){ nameEl.style.borderColor='var(--red)'; nameEl.placeholder='⚠ Ingresá tu nombre'; nameEl.focus(); }
     return;
   }
   if(!address){
@@ -1962,8 +1955,12 @@ async function sendOrder(){
     if(data.ok) _lastOrderId = data.id;
   } catch(e){ _lastOrderId = null; }
 
-  // 3. Limpiar carrito y dirección
+  // 3. Limpiar carrito, dirección y nombre
   cart=[]; saveCart(); renderCart(); _selectedAddress='';
+  const _nameEl = document.getElementById('clientName');
+  const _addrEl = document.getElementById('clientAddress');
+  if(_nameEl) _nameEl.value='';
+  if(_addrEl) _addrEl.value='';
   updateOrderNumDisplay();
 
   // 4. Mostrar modal de pago
@@ -2145,7 +2142,6 @@ function setStoreClosed(config){
 }
 
 document.addEventListener('DOMContentLoaded',()=>{
-  console.log('[JuicySpot] version: 2a9e930 loaded');
   buildQuickLists();
   applyPricesToDOM();
   renderCart();
