@@ -175,8 +175,15 @@ function normalizePhone(raw) {
 app.post('/api/firebase-login', async (req, res) => {
   const { token } = req.body;
   if (!token || typeof token !== 'string') return res.status(400).json({ error: 'Token requerido' });
+  let decoded;
   try {
-    const decoded = await admin.auth().verifyIdToken(token);
+    decoded = await admin.auth().verifyIdToken(token);
+  } catch (e) {
+    console.error('[firebase-login] verifyIdToken error:', e.message);
+    return res.status(401).json({ error: 'Token de Firebase inválido' });
+  }
+
+  try {
     const { uid, email, name } = decoded;
 
     const isSuperAdmin = email === SUPER_ADMIN;
@@ -199,9 +206,9 @@ app.post('/api/firebase-login', async (req, res) => {
     }
 
     res.json({ ok: true, isSuperAdmin, displayName: user.displayName, email });
-  } catch {
-    // No exponer el código de error interno
-    res.status(401).json({ error: 'Token de Firebase inválido' });
+  } catch (e) {
+    console.error('[firebase-login] Firestore error:', e.message);
+    res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
 
