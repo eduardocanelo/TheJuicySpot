@@ -258,6 +258,10 @@ header {
 #printArea { display: none; }
 
 @media print {
+  @page {
+    size: 80mm auto;   /* papel térmico continuo */
+    margin: 2mm;
+  }
   body > *        { display: none !important; }
   #printArea      { display: block !important; }
   #printArea .comanda {
