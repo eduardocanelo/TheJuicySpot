@@ -2075,7 +2075,6 @@ function initAutocomplete(){
       const place=ac.getPlace();
       _selectedAddress=place.formatted_address||input.value||'';
     });
-    input.addEventListener('input',()=>{ _selectedAddress=''; });
     _autocompleteReady=true;
   }catch(err){ console.warn('Maps autocomplete error:',err); }
 }
