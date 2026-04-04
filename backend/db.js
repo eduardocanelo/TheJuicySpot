@@ -1,8 +1,5 @@
-const fs   = require('fs');
-const path = require('path');
-require('dotenv').config();
-
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'orders.json');
+const admin = require('./firebase');
+const fs    = admin.firestore();
 
 const DEFAULT_SCHEDULE = [
   { day: 4, from: '18:00', to: '23:00' }, // Jueves
@@ -35,211 +32,19 @@ const DEFAULT_CATALOG = [
   { id:'panceta',       name:'Panceta Adicional',     sub:'Ración adicional',           emoji:'🥓', group:'extra',  price:2399,  active:true },
 ];
 
-function load() {
-  try {
-    if (fs.existsSync(DB_PATH)) {
-      const data = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
-      if (!data.users)  data.users  = [];
-      if (!data.store)  data.store  = { manualOverride: 'auto', schedule: DEFAULT_SCHEDULE };
-      if (!data.prices) data.prices = {};
-      if (!data.shifts) data.shifts = [];
-      if (!data.store.report_emails) data.store.report_emails = ['eduardocanelo@gmail.com'];
-      if (!data.store.report_name)   data.store.report_name   = 'The JuicySpot';
-      return data;
-    }
-  } catch (e) { console.error('Error leyendo DB:', e.message); }
-  return {
-    orders: [], nextId: 1, users: [], shifts: [],
-    store: {
-      manualOverride: 'auto', schedule: DEFAULT_SCHEDULE,
-      report_emails: ['eduardocanelo@gmail.com'], report_name: 'The JuicySpot'
-    },
-    prices: {}, catalog: null
-  };
-}
-
-// ── Catalog ───────────────────────────────────────────
-function getCatalog() {
-  const db = load();
-  if (db.catalog) return db.catalog;
-  // Migrar precios viejos al catálogo por defecto
-  const oldPrices = db.prices || {};
-  return DEFAULT_CATALOG.map(p => ({
-    ...p,
-    price: oldPrices[p.id] !== undefined ? oldPrices[p.id] : p.price
-  }));
-}
-
-function _saveCatalog(catalog) {
-  const db = load();
-  db.catalog = catalog;
-  save(db);
-  return catalog;
-}
-
-function addCatalogItem(item) {
-  const catalog = getCatalog();
-  const id = (item.name || 'producto')
-    .toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
-    + '_' + Date.now();
-  const newItem = { id, name: '', sub: '', emoji: '🍔', group: 'extra', price: 0, active: true, ...item, id };
-  catalog.push(newItem);
-  _saveCatalog(catalog);
-  return catalog;
-}
-
-function updateCatalogItem(id, patch) {
-  const catalog = getCatalog();
-  const idx = catalog.findIndex(p => p.id === id);
-  if (idx === -1) return null;
-  catalog[idx] = { ...catalog[idx], ...patch };
-  _saveCatalog(catalog);
-  return catalog[idx];
-}
-
-function deleteCatalogItem(id) {
-  const catalog = getCatalog();
-  const idx = catalog.findIndex(p => p.id === id);
-  if (idx === -1) return false;
-  catalog.splice(idx, 1);
-  _saveCatalog(catalog);
-  return true;
-}
-
-// ── Prices (compat) ───────────────────────────────────
-function getPrices() {
-  const prices = {};
-  getCatalog().forEach(p => { prices[p.id] = p.price; });
-  return prices;
-}
-
-function updatePrices(patch) {
-  const catalog = getCatalog();
-  for (const [key, val] of Object.entries(patch)) {
-    if (typeof val === 'number' && val >= 0 && val <= 9999999) {
-      const idx = catalog.findIndex(p => p.id === key);
-      if (idx !== -1) catalog[idx].price = Math.round(val);
-    }
-  }
-  _saveCatalog(catalog);
-  return getPrices();
-}
-
-// ── Store ─────────────────────────────────────────────
-function getStoreConfig() {
-  return load().store;
-}
-
-function updateStoreConfig(patch) {
-  const db = load();
-  db.store = { ...db.store, ...patch };
-  save(db);
-  return db.store;
-}
-
-// ── Usuarios ─────────────────────────────────────────
-function getUser(uid) {
-  return load().users.find(u => u.uid === uid) || null;
-}
-
-function upsertUser(uid, email, displayName) {
-  const db  = load();
-  const idx = db.users.findIndex(u => u.uid === uid);
-  if (idx === -1) {
-    db.users.push({ uid, email, displayName, approved: false, createdAt: new Date().toISOString() });
-  } else {
-    db.users[idx].email       = email;
-    db.users[idx].displayName = displayName;
-  }
-  save(db);
-  return getUser.call(null, uid) || db.users.find(u => u.uid === uid);
-}
-
-function approveUser(uid, approved) {
-  const db  = load();
-  const idx = db.users.findIndex(u => u.uid === uid);
-  if (idx === -1) return null;
-  db.users[idx].approved = approved;
-  save(db);
-  return db.users[idx];
-}
-
-function getPendingUsers() {
-  return load().users.filter(u => !u.approved);
-}
-
-function getAllUsers() {
-  return load().users;
-}
-
-function save(data) {
-  fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2), 'utf8');
-}
+const DEFAULT_STORE = {
+  manualOverride: 'auto',
+  schedule:       DEFAULT_SCHEDULE,
+  report_emails:  ['eduardocanelo@gmail.com'],
+  report_name:    'The JuicySpot',
+  deliveryZone:   'CABA',
+};
 
 function nowStr() {
   return new Date().toLocaleString('es-AR', {
     day:'2-digit', month:'2-digit', year:'numeric',
     hour:'2-digit', minute:'2-digit', second:'2-digit'
   });
-}
-
-function createOrder(data) {
-  const db  = load();
-  const now = nowStr();
-  const order = {
-    id:             db.nextId++,
-    order_num:      data.order_num,
-    client_name:    data.client_name,
-    client_phone:   data.client_phone,
-    client_address: data.client_address || '',
-    items_json:     data.items_json,
-    total:          data.total,
-    payment_method: data.payment_method || 'mp',
-    status:         'recibido',
-    paid_at:        null,
-    whatsapp_msg:   data.whatsapp_msg || '',
-    created_at:     data._created_at || now,
-    updated_at:     now
-  };
-  db.orders.unshift(order);
-  save(db);
-  return order;
-}
-
-function getOrders() {
-  return load().orders;
-}
-
-function resetOrders() {
-  const db = load();
-  db.orders = [];
-  db.nextId = 1;
-  save(db);
-}
-
-function updateStatus(id, status, _paidAt, _mpPaymentId, cancelData) {
-  const db  = load();
-  const idx = db.orders.findIndex(o => o.id === id);
-  if (idx === -1) return null;
-  db.orders[idx].status     = status;
-  db.orders[idx].updated_at = _paidAt || nowStr();
-  if (status === 'pago_confirmado') {
-    db.orders[idx].paid_at       = _paidAt || nowStr();
-    db.orders[idx].mp_payment_id = _mpPaymentId || null;
-  }
-  if (status === 'cancelado' && cancelData) {
-    db.orders[idx].cancel_reason = cancelData.cancel_reason || null;
-    db.orders[idx].cancel_notes  = cancelData.cancel_notes  || null;
-    db.orders[idx].cancelled_at  = nowStr();
-  }
-  save(db);
-  return db.orders[idx];
-}
-
-function parseDate(str) {
-  const parts = str.split(',')[0].split('/');
-  return `${parts[2]}-${parts[1]}-${parts[0]}`;
 }
 
 function parseDateTime(str) {
@@ -249,8 +54,184 @@ function parseDateTime(str) {
   return new Date(+m[3], +m[2]-1, +m[1], +m[4], +m[5], +m[6]).getTime();
 }
 
-function getMetrics(from, to) {
-  const orders = load().orders.filter(o => {
+// ── Helpers internos ──────────────────────────────────
+const configDoc = (id) => fs.collection('config').doc(id);
+
+// ── Catálogo ──────────────────────────────────────────
+async function getCatalog() {
+  const doc = await configDoc('catalog').get();
+  if (doc.exists && Array.isArray(doc.data().items)) return doc.data().items;
+  return DEFAULT_CATALOG;
+}
+
+async function _saveCatalog(items) {
+  await configDoc('catalog').set({ items });
+  return items;
+}
+
+async function addCatalogItem(item) {
+  const catalog = await getCatalog();
+  const id = (item.name || 'producto')
+    .toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
+    + '_' + Date.now();
+  const newItem = { id, name: '', sub: '', emoji: '🍔', group: 'extra', price: 0, active: true, ...item };
+  catalog.push(newItem);
+  return _saveCatalog(catalog);
+}
+
+async function updateCatalogItem(id, patch) {
+  const catalog = await getCatalog();
+  const idx = catalog.findIndex(p => p.id === id);
+  if (idx === -1) return null;
+  catalog[idx] = { ...catalog[idx], ...patch };
+  await _saveCatalog(catalog);
+  return catalog[idx];
+}
+
+async function deleteCatalogItem(id) {
+  const catalog = await getCatalog();
+  const idx = catalog.findIndex(p => p.id === id);
+  if (idx === -1) return false;
+  catalog.splice(idx, 1);
+  await _saveCatalog(catalog);
+  return true;
+}
+
+// ── Precios (compat) ──────────────────────────────────
+async function getPrices() {
+  const catalog = await getCatalog();
+  const prices = {};
+  catalog.forEach(p => { prices[p.id] = p.price; });
+  return prices;
+}
+
+// ── Config de tienda ──────────────────────────────────
+async function getStoreConfig() {
+  const doc = await configDoc('store').get();
+  if (!doc.exists) return { ...DEFAULT_STORE };
+  return { ...DEFAULT_STORE, ...doc.data() };
+}
+
+async function updateStoreConfig(patch) {
+  const current = await getStoreConfig();
+  const updated = { ...current, ...patch };
+  await configDoc('store').set(updated);
+  return updated;
+}
+
+// ── Usuarios ──────────────────────────────────────────
+async function getUser(uid) {
+  const doc = await fs.collection('users').doc(uid).get();
+  return doc.exists ? doc.data() : null;
+}
+
+async function upsertUser(uid, email, displayName) {
+  const ref = fs.collection('users').doc(uid);
+  const doc = await ref.get();
+  if (doc.exists) {
+    await ref.update({ email, displayName });
+  } else {
+    await ref.set({ uid, email, displayName, approved: false, createdAt: new Date().toISOString() });
+  }
+  return (await ref.get()).data();
+}
+
+async function approveUser(uid, approved) {
+  const ref = fs.collection('users').doc(uid);
+  const doc = await ref.get();
+  if (!doc.exists) return null;
+  await ref.update({ approved });
+  return (await ref.get()).data();
+}
+
+async function getPendingUsers() {
+  const snap = await fs.collection('users').where('approved', '==', false).get();
+  return snap.docs.map(d => d.data());
+}
+
+async function getAllUsers() {
+  const snap = await fs.collection('users').get();
+  return snap.docs.map(d => d.data());
+}
+
+// ── Pedidos ───────────────────────────────────────────
+async function createOrder(data) {
+  const counterRef = configDoc('counter');
+  let orderId;
+  await fs.runTransaction(async (t) => {
+    const counterDoc = await t.get(counterRef);
+    orderId = counterDoc.exists ? (counterDoc.data().nextId || 1) : 1;
+    t.set(counterRef, { nextId: orderId + 1 });
+  });
+
+  const now = nowStr();
+  const order = {
+    id:             orderId,
+    order_num:      data.order_num,
+    client_name:    data.client_name,
+    client_phone:   data.client_phone,
+    client_address: data.client_address || '',
+    items_json:     data.items_json,
+    total:          data.total,
+    payment_method: data.payment_method || 'mp',
+    status:         'recibido',
+    paid_at:        null,
+    mp_payment_id:  null,
+    whatsapp_msg:   data.whatsapp_msg || '',
+    created_at:     data._created_at || now,
+    updated_at:     now,
+    cancel_reason:  null,
+    cancel_notes:   null,
+    cancelled_at:   null,
+  };
+  await fs.collection('orders').doc(String(orderId)).set(order);
+  return order;
+}
+
+async function getOrders() {
+  const snap = await fs.collection('orders').orderBy('id', 'desc').get();
+  return snap.docs.map(d => d.data());
+}
+
+async function resetOrders() {
+  const snap = await fs.collection('orders').get();
+  const batch = fs.batch();
+  snap.docs.forEach(d => batch.delete(d.ref));
+  await batch.commit();
+  await configDoc('counter').set({ nextId: 1 });
+}
+
+async function updateStatus(id, status, _paidAt, _mpPaymentId, cancelData) {
+  const ref = fs.collection('orders').doc(String(id));
+  const doc = await ref.get();
+  if (!doc.exists) return null;
+
+  const update = { status, updated_at: _paidAt || nowStr() };
+
+  if (status === 'pago_confirmado') {
+    update.paid_at       = _paidAt || nowStr();
+    update.mp_payment_id = _mpPaymentId || null;
+  }
+  if (status === 'cancelado' && cancelData) {
+    update.cancel_reason = cancelData.cancel_reason || null;
+    update.cancel_notes  = cancelData.cancel_notes  || null;
+    update.cancelled_at  = nowStr();
+  }
+
+  await ref.update(update);
+  return (await ref.get()).data();
+}
+
+// ── Métricas ──────────────────────────────────────────
+function parseDate(str) {
+  const parts = str.split(',')[0].split('/');
+  return `${parts[2]}-${parts[1]}-${parts[0]}`;
+}
+
+async function getMetrics(from, to) {
+  const allOrders = await getOrders();
+  const orders = allOrders.filter(o => {
     if (!from && !to) return true;
     const d = parseDate(o.created_at);
     if (from && to)  return d >= from && d <= to;
@@ -286,9 +267,7 @@ function getMetrics(from, to) {
       productMap[key].revenue += item.unitPrice * item.qty;
     });
   });
-  const topProducts = Object.values(productMap)
-    .sort((a, b) => b.qty - a.qty)
-    .slice(0, 10);
+  const topProducts = Object.values(productMap).sort((a, b) => b.qty - a.qty).slice(0, 10);
 
   const deliveredOrders = orders.filter(o => o.status === 'entregado');
   let avgDeliveryMinutes = null;
@@ -309,12 +288,8 @@ function getMetrics(from, to) {
   const pendingShipments = orders
     .filter(o => o.paid_at && NOT_SHIPPED.has(o.status))
     .map(o => ({
-      id:            o.id,
-      order_num:     o.order_num,
-      client_name:   o.client_name,
-      total:         o.total,
-      status:        o.status,
-      paid_at:       o.paid_at,
+      id: o.id, order_num: o.order_num, client_name: o.client_name,
+      total: o.total, status: o.status, paid_at: o.paid_at,
       mp_payment_id: o.mp_payment_id || null
     }))
     .sort((a, b) => b.id - a.id);
@@ -323,19 +298,18 @@ function getMetrics(from, to) {
            avgDeliveryMinutes, mpRevenue, mpCount, pendingShipments };
 }
 
-// ── Turnos ─────────────────────────���──────────────────
-function getShifts() {
-  const data = load();
-  return (data.shifts || []).slice().sort((a, b) => b.id - a.id);
+// ── Turnos ────────────────────────────────────────────
+async function getShifts() {
+  const snap = await fs.collection('shifts').orderBy('id', 'desc').get();
+  return snap.docs.map(d => d.data());
 }
 
-function saveShift(shiftData) {
-  const data = load();
-  if (!data.shifts) data.shifts = [];
-  const id = data.shifts.length ? Math.max(...data.shifts.map(s => s.id)) + 1 : 1;
+async function saveShift(shiftData) {
+  const snap = await fs.collection('shifts').orderBy('id', 'desc').limit(1).get();
+  const maxId = snap.empty ? 0 : (snap.docs[0].data().id || 0);
+  const id    = maxId + 1;
   const shift = { id, closed_at: nowStr(), ...shiftData };
-  data.shifts.unshift(shift);
-  save(data);
+  await fs.collection('shifts').doc(String(id)).set(shift);
   return shift;
 }
 
@@ -344,7 +318,7 @@ module.exports = {
   getUser, upsertUser, approveUser, getPendingUsers, getAllUsers,
   getStoreConfig, updateStoreConfig,
   getCatalog, addCatalogItem, updateCatalogItem, deleteCatalogItem,
-  getPrices, updatePrices,
+  getPrices,
   getShifts, saveShift,
   parseDateTime,
 };

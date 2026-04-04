@@ -16,20 +16,7 @@ const { MercadoPagoConfig, Preference, Payment } = require('mercadopago');
 const mpClient = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN });
 
 // ── Firebase Admin ────────────────────────────────────────
-const admin = require('firebase-admin');
-let _fbCredential;
-if (process.env.FIREBASE_PROJECT_ID) {
-  const rawKey = process.env.FIREBASE_PRIVATE_KEY || '';
-  const pk = rawKey.indexOf('\\n') !== -1 ? rawKey.split('\\n').join('\n') : rawKey;
-  _fbCredential = admin.credential.cert({
-    projectId:   process.env.FIREBASE_PROJECT_ID,
-    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-    privateKey:  pk
-  });
-} else {
-  _fbCredential = admin.credential.cert(require('./firebase-service-account.json'));
-}
-admin.initializeApp({ credential: _fbCredential });
+const admin = require('./firebase');
 
 const db = require('./db');
 
@@ -127,7 +114,7 @@ async function requireAuth(req, res, next) {
   if (!token) return res.status(401).json({ error: 'No autorizado' });
   try {
     const decoded = await admin.auth().verifyIdToken(token);
-    const user    = db.getUser(decoded.uid);
+    const user    = await db.getUser(decoded.uid);
     if (!user || !user.approved) return res.status(403).json({ error: 'Acceso pendiente de aprobación' });
     req.firebaseUser = decoded;
     next();
@@ -161,8 +148,8 @@ function isValidPhone(phone) {
 }
 
 // Recalcula el total desde los precios del servidor (no confiar en el cliente)
-function calcOrderTotal(items) {
-  const prices = db.getPrices();
+async function calcOrderTotal(items) {
+  const prices = await db.getPrices();
   return items.reduce((sum, item) => {
     const price = prices[item.key];
     const qty   = typeof item.qty === 'number' && item.qty > 0 ? Math.floor(item.qty) : 0;
@@ -193,18 +180,18 @@ app.post('/api/firebase-login', async (req, res) => {
     const { uid, email, name } = decoded;
 
     const isSuperAdmin = email === SUPER_ADMIN;
-    let user = db.getUser(uid);
+    let user = await db.getUser(uid);
 
     if (!user) {
-      db.upsertUser(uid, email, name || email.split('@')[0]);
-      user = db.getUser(uid);
-      if (isSuperAdmin) db.approveUser(uid, true);
-      user = db.getUser(uid);
+      await db.upsertUser(uid, email, name || email.split('@')[0]);
+      user = await db.getUser(uid);
+      if (isSuperAdmin) await db.approveUser(uid, true);
+      user = await db.getUser(uid);
     }
 
     if (!user.approved && isSuperAdmin) {
-      db.approveUser(uid, true);
-      user = db.getUser(uid);
+      await db.approveUser(uid, true);
+      user = await db.getUser(uid);
     }
 
     if (!user.approved) {
@@ -235,12 +222,12 @@ function isStoreOpen(config) {
   return time >= from && time < to;
 }
 
-app.get('/api/store/status', (req, res) => {
-  const config = db.getStoreConfig();
+app.get('/api/store/status', async (req, res) => {
+  const config = await db.getStoreConfig();
   res.json({ open: isStoreOpen(config), config });
 });
 
-app.patch('/api/store/config', requireAuth, (req, res) => {
+app.patch('/api/store/config', requireAuth, async (req, res) => {
   const { manualOverride, schedule } = req.body;
   const VALID_OVERRIDES = ['auto', 'open', 'closed'];
   const patch = {};
@@ -252,7 +239,7 @@ app.patch('/api/store/config', requireAuth, (req, res) => {
     if (!Array.isArray(schedule)) return res.status(400).json({ error: 'Schedule inválido' });
     patch.schedule = schedule;
   }
-  const updated = db.updateStoreConfig(patch);
+  const updated = await db.updateStoreConfig(patch);
   broadcast('store_update', { open: isStoreOpen(updated), config: updated });
   res.json(updated);
 });
@@ -261,18 +248,18 @@ app.patch('/api/store/config', requireAuth, (req, res) => {
 //  GESTIÓN DE USUARIOS (solo super admin)
 // ════════════════════════════════════════════════════════
 
-app.get('/api/users', requireSuperAdmin, (req, res) => {
-  res.json(db.getAllUsers());
+app.get('/api/users', requireSuperAdmin, async (req, res) => {
+  res.json(await db.getAllUsers());
 });
 
-app.post('/api/users/:uid/approve', requireSuperAdmin, (req, res) => {
-  const user = db.approveUser(req.params.uid, true);
+app.post('/api/users/:uid/approve', requireSuperAdmin, async (req, res) => {
+  const user = await db.approveUser(req.params.uid, true);
   if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
   res.json(user);
 });
 
-app.post('/api/users/:uid/reject', requireSuperAdmin, (req, res) => {
-  const user = db.approveUser(req.params.uid, false);
+app.post('/api/users/:uid/reject', requireSuperAdmin, async (req, res) => {
+  const user = await db.approveUser(req.params.uid, false);
   if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
   res.json(user);
 });
@@ -281,8 +268,8 @@ app.post('/api/users/:uid/reject', requireSuperAdmin, (req, res) => {
 //  TURNOS
 // ════════════════════════════════════════════════════════
 
-function buildShiftReport(shiftDate, shiftFrom, shiftTo) {
-  const allOrders = db.getOrders();
+async function buildShiftReport(shiftDate, shiftFrom, shiftTo) {
+  const allOrders = await db.getOrders();
   const [y, m, d] = shiftDate.split('-');
   const datePrefix = `${d}/${m}/${y}`;
   const shiftOrders = allOrders.filter(o => o.created_at && o.created_at.startsWith(datePrefix));
@@ -433,8 +420,8 @@ app.post('/api/shifts/close', requireAuth, async (req, res) => {
   const { shift_date, shift_from, shift_to } = req.body;
   if (!shift_date || !shift_from || !shift_to) return res.status(400).json({ error: 'Faltan datos del turno' });
 
-  const config    = db.getStoreConfig();
-  const report    = buildShiftReport(shift_date, shift_from, shift_to);
+  const config    = await db.getStoreConfig();
+  const report    = await buildShiftReport(shift_date, shift_from, shift_to);
   const localName = config.report_name   || 'The JuicySpot';
   const emails    = config.report_emails || [];
 
@@ -455,18 +442,18 @@ app.post('/api/shifts/close', requireAuth, async (req, res) => {
     }
   }
 
-  const shift = db.saveShift({ ...report, report_sent_to: { emails } });
+  const shift = await db.saveShift({ ...report, report_sent_to: { emails } });
   broadcast('shift_closed', { shiftId: shift.id });
   res.json({ ok: true, shiftId: shift.id, results });
 });
 
-app.get('/api/shifts', requireSuperAdmin, (req, res) => {
-  res.json(db.getShifts());
+app.get('/api/shifts', requireSuperAdmin, async (req, res) => {
+  res.json(await db.getShifts());
 });
 
 app.post('/api/shifts/test-email', requireSuperAdmin, async (req, res) => {
   if (!resend) return res.status(503).json({ error: 'RESEND_API_KEY no configurado' });
-  const config    = db.getStoreConfig();
+  const config    = await db.getStoreConfig();
   const emails    = config.report_emails || [];
   const localName = config.report_name  || 'The JuicySpot';
   if (!emails.length) return res.status(400).json({ error: 'No hay emails configurados' });
@@ -489,7 +476,7 @@ app.post('/api/shifts/test-email', requireSuperAdmin, async (req, res) => {
 });
 
 app.post('/api/shifts/test-full', requireSuperAdmin, async (req, res) => {
-  const config    = db.getStoreConfig();
+  const config    = await db.getStoreConfig();
   const localName = config.report_name   || 'The JuicySpot';
   const emails    = config.report_emails || [];
 
@@ -551,8 +538,9 @@ app.post('/api/shifts/test-full', requireSuperAdmin, async (req, res) => {
   res.json({ ok: true, results });
 });
 
-app.get('/api/shifts/:id', requireSuperAdmin, (req, res) => {
-  const shift = db.getShifts().find(s => s.id === parseInt(req.params.id));
+app.get('/api/shifts/:id', requireSuperAdmin, async (req, res) => {
+  const shifts = await db.getShifts();
+  const shift = shifts.find(s => s.id === parseInt(req.params.id));
   if (!shift) return res.status(404).json({ error: 'Turno no encontrado' });
   res.json(shift);
 });
@@ -561,7 +549,7 @@ app.get('/api/shifts/:id', requireSuperAdmin, (req, res) => {
 //  PEDIDOS
 // ════════════════════════════════════════════════════════
 
-app.post('/api/orders', orderLimiter, (req, res) => {
+app.post('/api/orders', orderLimiter, async (req, res) => {
   const { order_num, client_name, client_phone, client_address, items, whatsapp_msg, payment_method } = req.body;
 
   const name    = sanitizeString(client_name, 100);
@@ -577,11 +565,11 @@ app.post('/api/orders', orderLimiter, (req, res) => {
     return res.status(400).json({ error: 'Items inválidos' });
 
   // Total calculado por el servidor — no se acepta el del cliente
-  const total = calcOrderTotal(items);
+  const total = await calcOrderTotal(items);
   if (total <= 0) return res.status(400).json({ error: 'Ningún item tiene precio válido' });
 
   try {
-    const order = db.createOrder({
+    const order = await db.createOrder({
       order_num:      oNum || '#0001',
       client_name:    name,
       client_phone:   phone ? normalizePhone(phone) : '',
@@ -599,24 +587,24 @@ app.post('/api/orders', orderLimiter, (req, res) => {
   }
 });
 
-app.get('/api/orders', requireAuth, (req, res) => {
-  res.json(db.getOrders());
+app.get('/api/orders', requireAuth, async (req, res) => {
+  res.json(await db.getOrders());
 });
 
-app.patch('/api/orders/:id/status', requireAuth, (req, res) => {
+app.patch('/api/orders/:id/status', requireAuth, async (req, res) => {
   const VALID = ['recibido','pago_confirmado','en_preparacion','en_camino','entregado','cancelado'];
   const { status, cancel_reason, cancel_notes } = req.body;
   if (!VALID.includes(status)) return res.status(400).json({ error: 'Estado inválido' });
   if (status === 'cancelado' && !cancel_reason) return res.status(400).json({ error: 'Motivo de cancelación requerido' });
-  const order = db.updateStatus(parseInt(req.params.id), status, null, null, { cancel_reason, cancel_notes });
+  const order = await db.updateStatus(parseInt(req.params.id), status, null, null, { cancel_reason, cancel_notes });
   if (!order) return res.status(404).json({ error: 'Pedido no encontrado' });
   broadcast('status_update', order);
   res.json(order);
 });
 
-app.get('/api/metrics', requireAuth, (req, res) => {
+app.get('/api/metrics', requireAuth, async (req, res) => {
   const { from, to } = req.query;
-  res.json(db.getMetrics(from, to));
+  res.json(await db.getMetrics(from, to));
 });
 
 app.get('/api/orders/stream', requireAuth, (req, res) => {
@@ -635,21 +623,22 @@ app.get('/api/orders/stream', requireAuth, (req, res) => {
 // ════════════════════════════════════════════════════════
 
 // Público: catálogo completo (solo activos)
-app.get('/api/catalog', (req, res) => {
-  res.json(db.getCatalog().filter(p => p.active !== false));
+app.get('/api/catalog', async (req, res) => {
+  const catalog = await db.getCatalog();
+  res.json(catalog.filter(p => p.active !== false));
 });
 
 // Admin: catálogo completo incluyendo inactivos
-app.get('/api/catalog/all', requireAuth, (req, res) => {
-  res.json(db.getCatalog());
+app.get('/api/catalog/all', requireAuth, async (req, res) => {
+  res.json(await db.getCatalog());
 });
 
 // Admin: agregar producto
-app.post('/api/catalog', requireAuth, (req, res) => {
+app.post('/api/catalog', requireAuth, async (req, res) => {
   const { name, sub, emoji, group, price, active } = req.body;
   if (!name || typeof price !== 'number' || price < 0)
     return res.status(400).json({ error: 'name y price (número >= 0) requeridos' });
-  const catalog = db.addCatalogItem({
+  const catalog = await db.addCatalogItem({
     name: String(name).slice(0, 80),
     sub:   String(sub  || '').slice(0, 120),
     emoji: String(emoji || '🍔').slice(0, 8),
@@ -657,12 +646,12 @@ app.post('/api/catalog', requireAuth, (req, res) => {
     price: Math.round(price),
     active: active !== false,
   });
-  broadcast('catalog_update', db.getCatalog().filter(p => p.active !== false));
+  broadcast('catalog_update', (await db.getCatalog()).filter(p => p.active !== false));
   res.json(catalog);
 });
 
 // Admin: editar producto
-app.put('/api/catalog/:id', requireAuth, (req, res) => {
+app.put('/api/catalog/:id', requireAuth, async (req, res) => {
   const patch = {};
   const { name, sub, emoji, group, price, active } = req.body;
   if (name  !== undefined) patch.name  = String(name).slice(0, 80);
@@ -671,27 +660,27 @@ app.put('/api/catalog/:id', requireAuth, (req, res) => {
   if (group !== undefined && ['burger','promo','extra','especial'].includes(group)) patch.group = group;
   if (typeof price === 'number' && price >= 0) patch.price = Math.round(price);
   if (active !== undefined) patch.active = !!active;
-  const item = db.updateCatalogItem(req.params.id, patch);
+  const item = await db.updateCatalogItem(req.params.id, patch);
   if (!item) return res.status(404).json({ error: 'Producto no encontrado' });
-  broadcast('catalog_update', db.getCatalog().filter(p => p.active !== false));
+  broadcast('catalog_update', (await db.getCatalog()).filter(p => p.active !== false));
   res.json(item);
 });
 
 // Admin: eliminar producto
-app.delete('/api/catalog/:id', requireAuth, (req, res) => {
-  const ok = db.deleteCatalogItem(req.params.id);
+app.delete('/api/catalog/:id', requireAuth, async (req, res) => {
+  const ok = await db.deleteCatalogItem(req.params.id);
   if (!ok) return res.status(404).json({ error: 'Producto no encontrado' });
-  broadcast('catalog_update', db.getCatalog().filter(p => p.active !== false));
+  broadcast('catalog_update', (await db.getCatalog()).filter(p => p.active !== false));
   res.json({ ok: true });
 });
 
 // Compat: precios como mapa plano
-app.get('/api/prices', (req, res) => {
-  res.json(db.getPrices());
+app.get('/api/prices', async (req, res) => {
+  res.json(await db.getPrices());
 });
 
-app.delete('/api/orders/all', requireAuth, (req, res) => {
-  db.resetOrders();
+app.delete('/api/orders/all', requireAuth, async (req, res) => {
+  await db.resetOrders();
   res.json({ ok: true });
 });
 
@@ -702,7 +691,7 @@ app.delete('/api/orders/all', requireAuth, (req, res) => {
 app.post('/api/orders/:id/payment', async (req, res) => {
   const id = parseInt(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'ID inválido' });
-  const order = db.getOrders().find(o => o.id === id);
+  const order = (await db.getOrders()).find(o => o.id === id);
   if (!order) return res.status(404).json({ error: 'Pedido no encontrado' });
 
   try {
@@ -781,10 +770,10 @@ app.post('/api/webhooks/mercadopago', async (req, res) => {
     if (paymentData.status !== 'approved') return;
 
     const orderId = parseInt(paymentData.external_reference);
-    const order   = db.getOrders().find(o => o.id === orderId);
+    const order   = (await db.getOrders()).find(o => o.id === orderId);
     if (!order || order.status !== 'recibido') return;
 
-    const updated = db.updateStatus(orderId, 'pago_confirmado', null, String(paymentData.id));
+    const updated = await db.updateStatus(orderId, 'pago_confirmado', null, String(paymentData.id));
     broadcast('status_update', updated);
     console.log(`✅ Pago aprobado → pedido ${order.order_num} → pago_confirmado (MP#${paymentData.id})`);
   } catch (e) {
