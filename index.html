@@ -1410,7 +1410,7 @@ function showTab(id, btn) {
       padding:10px 14px;border-radius:2px;margin-bottom:8px;outline:none;
     " onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor='rgba(212,146,10,.2)'">
 
-    <input id="clientAddress" placeholder="Dirección de entrega *" style="
+    <input id="clientAddress" placeholder="Dirección de entrega *" autocomplete="off" style="
       width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(212,146,10,.2);
       color:var(--white);font-family:'Barlow',sans-serif;font-size:14px;
       padding:10px 14px;border-radius:2px;margin-bottom:12px;outline:none;
@@ -2074,6 +2074,8 @@ function initAutocomplete(){
       const place=ac.getPlace();
       _selectedAddress=place.formatted_address||input.value||'';
     });
+    // Sync _selectedAddress whenever the user types manually
+    input.addEventListener('input',()=>{ _selectedAddress=input.value; });
     _autocompleteReady=true;
   }catch(err){ console.warn('Maps autocomplete error:',err); }
 }
@@ -2141,7 +2143,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 
 <!-- Google Maps Places API – reemplazá YOUR_API_KEY con tu clave real -->
 <script
-  src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAiYDjE9vH2KHLzP9AMPSmMmFIVyLYWjTw&libraries=places&callback=initAutocomplete&language=es&region=AR"
+  src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAiYDjE9vH2KHLzP9AMPSmMmFIVyLYWjTw&loading=async&libraries=places&callback=initAutocomplete&language=es&region=AR"
   async defer>
 </script>
 
