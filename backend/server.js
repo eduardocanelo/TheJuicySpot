@@ -29,6 +29,7 @@ admin.initializeApp({ credential: _fbCredential });
 const db = require('./db');
 
 const app             = express();
+app.set('trust proxy', 1); // Railway + Cloudflare proxy
 const PORT            = process.env.PORT         || 3000;
 const SUPER_ADMIN     = process.env.SUPER_ADMIN  || 'eduardocanelo@gmail.com';
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || 'http://localhost:3000';
@@ -62,7 +63,10 @@ app.use(express.json({ limit: '50kb' }));
 // ── Static ───────────────────────────────────────────────
 app.use(express.static(path.join(__dirname, '..')));
 app.use('/admin', express.static(path.join(__dirname, '../admin')));
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, '../index.html')));
+app.get('/', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.sendFile(path.join(__dirname, '../index.html'));
+});
 
 // ── Rate limiting ─────────────────────────────────────────
 const orderLimiter = rateLimit({
