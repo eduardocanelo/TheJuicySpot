@@ -1197,6 +1197,9 @@ const FIREBASE_CONFIG = {
 };
 firebase.initializeApp(FIREBASE_CONFIG);
 const fbAuth = firebase.auth();
+  fbAuth.getRedirectResult().then(async cred => {
+    if (cred && cred.user) await handleFirebaseUser(cred.user);
+  }).catch(() => {});
 
 function showLoginForm(mode) {
   const isReg = mode === 'register';
@@ -1239,12 +1242,19 @@ async function doEmailAuth() {
 }
 
 async function doGoogleLogin() {
-  try {
-    const provider = new firebase.auth.GoogleAuthProvider();
-    const cred = await fbAuth.signInWithPopup(provider);
-    await handleFirebaseUser(cred.user);
-  } catch (e) {
-    if (e.code !== 'auth/popup-closed-by-user') setLoginErr('Error con Google: ' + e.message);
+  const provider = new firebase.auth.GoogleAuthProvider();
+  const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+  const isStandalone = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
+  if (isSafari || isStandalone) {
+    try { await fbAuth.signInWithRedirect(provider); }
+    catch (e) { setLoginErr('Error con Google: ' + e.message); }
+  } else {
+    try {
+      const cred = await fbAuth.signInWithPopup(provider);
+      await handleFirebaseUser(cred.user);
+    } catch (e) {
+      if (e.code !== 'auth/popup-closed-by-user') setLoginErr('Error con Google: ' + e.message);
+    }
   }
 }
 
