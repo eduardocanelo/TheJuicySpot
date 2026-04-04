@@ -523,6 +523,8 @@ function openStoreModal() {
     if (fi) { fi.value = slot ? slot.from : '18:00'; fi.disabled = !slot; }
     if (ti) { ti.value = slot ? slot.to   : '23:00'; ti.disabled = !slot; }
   });
+  const dz = document.getElementById('deliveryZone');
+  if(dz) dz.value = _storeConfig.deliveryZone || 'caba';
   document.getElementById('storeModal').classList.add('show');
 }
 
@@ -563,7 +565,7 @@ function saveStoreConfig() {
   fetch(API + '/api/store/config', {
     method: 'PATCH',
     headers: apiHeaders(),
-    body: JSON.stringify({ manualOverride: _currentOverride, schedule })
+    body: JSON.stringify({ manualOverride: _currentOverride, schedule, deliveryZone: document.getElementById('deliveryZone').value })
   })
   .then(r => r.json())
   .then(config => {
@@ -1605,6 +1607,14 @@ function setUserApproval(uid, approved) {
     </div>
   </div>
 
+    <div style="margin-bottom:16px">
+      <label style="font-size:12px;letter-spacing:2px;text-transform:uppercase;color:rgba(245,240,230,.5);display:block;margin-bottom:8px">Zona de entrega</label>
+      <select id="deliveryZone" style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(212,146,10,.25);color:var(--white);font-family:'Barlow Condensed',sans-serif;font-size:15px;padding:9px 12px;border-radius:3px;outline:none">
+        <option value="caba">CABA</option>
+        <option value="gba">CABA + GBA</option>
+        <option value="argentina">Todo Argentina</option>
+      </select>
+    </div>
     <button class="smodal-save" onclick="saveStoreConfig()">Guardar configuración</button>
   </div>
 </div>
