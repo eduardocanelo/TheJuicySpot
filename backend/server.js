@@ -14,10 +14,12 @@ const mpClient = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKE
 const admin = require('firebase-admin');
 let _fbCredential;
 if (process.env.FIREBASE_PROJECT_ID) {
+  const rawKey = process.env.FIREBASE_PRIVATE_KEY || '';
+  const pk = rawKey.indexOf('\\n') !== -1 ? rawKey.split('\\n').join('\n') : rawKey;
   _fbCredential = admin.credential.cert({
     projectId:   process.env.FIREBASE_PROJECT_ID,
     clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-    privateKey:  (process.env.FIREBASE_PRIVATE_KEY || '').split(String.fromCharCode(92)+'n').join(String.fromCharCode(10))
+    privateKey:  pk
   });
 } else {
   _fbCredential = admin.credential.cert(require('./firebase-service-account.json'));
