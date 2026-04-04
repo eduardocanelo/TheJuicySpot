@@ -6,6 +6,11 @@ const rateLimit = require('express-rate-limit');
 const crypto    = require('crypto');
 require('dotenv').config();
 
+// ── Resend (email) ────────────────────────────────────────
+const { Resend } = require('resend');
+const resend     = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+const RESEND_FROM = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
+
 // ── Mercado Pago ──────────────────────────────────────────
 const { MercadoPagoConfig, Preference, Payment } = require('mercadopago');
 const mpClient = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN });
@@ -273,6 +278,286 @@ app.post('/api/users/:uid/reject', requireSuperAdmin, (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════
+//  TURNOS
+// ════════════════════════════════════════════════════════
+
+function buildShiftReport(shiftDate, shiftFrom, shiftTo) {
+  const allOrders = db.getOrders();
+  const [y, m, d] = shiftDate.split('-');
+  const datePrefix = `${d}/${m}/${y}`;
+  const shiftOrders = allOrders.filter(o => o.created_at && o.created_at.startsWith(datePrefix));
+
+  const total         = shiftOrders.length;
+  const delivered     = shiftOrders.filter(o => o.status === 'entregado').length;
+  const cancelled     = shiftOrders.filter(o => o.status === 'cancelado').length;
+  const totalRevenue  = shiftOrders.reduce((s, o) => s + (o.total || 0), 0);
+  const avgTicket     = total ? Math.round(totalRevenue / total) : 0;
+
+  const mpOrders       = shiftOrders.filter(o => o.payment_method === 'mp');
+  const transferOrders = shiftOrders.filter(o => o.payment_method === 'transfer');
+
+  const cancelReasons = {};
+  shiftOrders.filter(o => o.status === 'cancelado').forEach(o => {
+    const r = o.cancel_reason || 'otro';
+    cancelReasons[r] = (cancelReasons[r] || 0) + 1;
+  });
+
+  const productMap = {};
+  shiftOrders.forEach(o => {
+    let items; try { items = JSON.parse(o.items_json); } catch { return; }
+    items.forEach(item => {
+      const key = item.id || item.name;
+      if (!productMap[key]) productMap[key] = { name: item.name, sub: item.sub || '', emoji: item.emoji || '🍔', qty: 0, revenue: 0 };
+      productMap[key].qty     += item.qty;
+      productMap[key].revenue += (item.unitPrice || 0) * item.qty;
+    });
+  });
+  const topProducts = Object.values(productMap).sort((a, b) => b.qty - a.qty).slice(0, 5);
+
+  const deliveredWithTimes = shiftOrders.filter(o => o.status === 'entregado' && o.paid_at && o.updated_at);
+  let avgDeliveryMinutes = null;
+  if (deliveredWithTimes.length) {
+    const totalMs = deliveredWithTimes.reduce((sum, o) => {
+      const paid = db.parseDateTime(o.paid_at); const upd = db.parseDateTime(o.updated_at);
+      return (paid && upd) ? sum + (upd - paid) : sum;
+    }, 0);
+    avgDeliveryMinutes = Math.round(totalMs / deliveredWithTimes.length / 60000);
+  }
+
+  return {
+    date: shiftDate, from: shiftFrom, to: shiftTo,
+    total, delivered, cancelled, totalRevenue, avgTicket,
+    mpCount: mpOrders.length, mpRevenue: mpOrders.reduce((s, o) => s + o.total, 0),
+    transferCount: transferOrders.length, transferRevenue: transferOrders.reduce((s, o) => s + o.total, 0),
+    cancelReasons, topProducts, avgDeliveryMinutes,
+    orders: shiftOrders.map(o => ({
+      order_num: o.order_num, client_name: o.client_name,
+      total: o.total, status: o.status,
+      payment_method: o.payment_method, created_at: o.created_at
+    }))
+  };
+}
+
+const CANCEL_LABELS = {
+  cliente_no_atendio: 'Cliente no atendió', pedido_duplicado: 'Pedido duplicado',
+  pedido_erroneo: 'Error en el pedido',    fuera_de_zona: 'Fuera de zona',
+  sin_stock: 'Sin stock', otro: 'Otro',
+};
+
+function fmtARS(n) { return '$' + Number(n).toLocaleString('es-AR'); }
+
+function buildEmailHtml(r, localName) {
+  const dayNames = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+  const [yr, mo, dy] = r.date.split('-');
+  const dow = dayNames[new Date(r.date + 'T12:00:00').getDay()];
+  const dateLabel = `${dow} ${dy}/${mo}/${yr}`;
+
+  const cancelRows = Object.entries(r.cancelReasons)
+    .map(([k, v]) => `<tr><td style="padding:4px 8px;color:#aaa">${CANCEL_LABELS[k]||k}</td><td style="padding:4px 8px;text-align:right">${v}</td></tr>`).join('');
+
+  const productRows = r.topProducts
+    .map((p, i) => `<tr><td style="padding:5px 8px">${i+1}. ${p.emoji} ${p.name}</td><td style="padding:5px 8px;text-align:right">${p.qty}u</td><td style="padding:5px 8px;text-align:right;color:#D4920A">${fmtARS(p.revenue)}</td></tr>`).join('');
+
+  const orderRows = r.orders
+    .map(o => {
+      const statusLabel = { recibido:'Recibido', pago_confirmado:'Pago', en_preparacion:'En prep.', en_camino:'En camino', entregado:'Entregado', cancelado:'Cancelado' }[o.status] || o.status;
+      const statusColor = o.status === 'entregado' ? '#3A9E5F' : o.status === 'cancelado' ? '#C0392B' : '#888';
+      return `<tr><td style="padding:4px 8px;color:#888">${o.order_num}</td><td style="padding:4px 8px">${o.client_name}</td><td style="padding:4px 8px;text-align:right;color:#D4920A">${fmtARS(o.total)}</td><td style="padding:4px 8px;color:${statusColor}">${statusLabel}</td><td style="padding:4px 8px;color:#aaa">${o.payment_method==='mp'?'MP':'Transfer'}</td></tr>`;
+    }).join('');
+
+  return `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#0e0a04;font-family:Arial,sans-serif;color:#f5f0e6">
+<table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:32px 16px">
+<table width="560" cellpadding="0" cellspacing="0" style="background:#111;border-radius:10px;overflow:hidden">
+  <tr><td style="background:#1a1200;padding:24px 28px;border-bottom:2px solid #D4920A">
+    <div style="font-size:22px;font-weight:700;color:#D4920A;letter-spacing:2px">${localName}</div>
+    <div style="font-size:13px;color:rgba(245,240,230,.5);margin-top:4px">Cierre de turno · ${dateLabel} · ${r.from}–${r.to}</div>
+  </td></tr>
+  <tr><td style="padding:24px 28px">
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px">
+      <tr>
+        <td style="background:#1a1a1a;border-radius:8px;padding:16px;text-align:center;width:25%">
+          <div style="font-size:28px;font-weight:700;color:#f5f0e6">${r.total}</div>
+          <div style="font-size:11px;color:#888;text-transform:uppercase">Pedidos</div>
+        </td>
+        <td style="width:8px"></td>
+        <td style="background:#1a1a1a;border-radius:8px;padding:16px;text-align:center;width:25%">
+          <div style="font-size:28px;font-weight:700;color:#D4920A">${fmtARS(r.totalRevenue)}</div>
+          <div style="font-size:11px;color:#888;text-transform:uppercase">Ingresos</div>
+        </td>
+        <td style="width:8px"></td>
+        <td style="background:#1a1a1a;border-radius:8px;padding:16px;text-align:center;width:25%">
+          <div style="font-size:28px;font-weight:700;color:#3A9E5F">${r.delivered}</div>
+          <div style="font-size:11px;color:#888;text-transform:uppercase">Entregados</div>
+        </td>
+        <td style="width:8px"></td>
+        <td style="background:#1a1a1a;border-radius:8px;padding:16px;text-align:center;width:25%">
+          <div style="font-size:28px;font-weight:700;color:#f5f0e6">${r.avgDeliveryMinutes !== null ? r.avgDeliveryMinutes + ' min' : '—'}</div>
+          <div style="font-size:11px;color:#888;text-transform:uppercase">T. promedio</div>
+        </td>
+      </tr>
+    </table>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;background:#1a1a1a;border-radius:8px">
+      <tr><td colspan="3" style="padding:12px 16px 6px;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#D4920A">Métodos de pago</td></tr>
+      <tr><td style="padding:6px 16px">🔵 Mercado Pago</td><td style="padding:6px 16px;text-align:right;color:#888">${r.mpCount} pedidos</td><td style="padding:6px 16px;text-align:right;color:#D4920A">${fmtARS(r.mpRevenue)}</td></tr>
+      <tr><td style="padding:6px 16px 12px">🏦 Transferencia</td><td style="padding:6px 16px 12px;text-align:right;color:#888">${r.transferCount} pedidos</td><td style="padding:6px 16px 12px;text-align:right;color:#D4920A">${fmtARS(r.transferRevenue)}</td></tr>
+    </table>
+
+    ${r.topProducts.length ? `
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;background:#1a1a1a;border-radius:8px">
+      <tr><td colspan="3" style="padding:12px 16px 6px;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#D4920A">Top productos</td></tr>
+      ${productRows}
+    </table>` : ''}
+
+    ${r.cancelled > 0 ? `
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;background:#1a1a1a;border-radius:8px">
+      <tr><td colspan="2" style="padding:12px 16px 6px;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#C0392B">Cancelados (${r.cancelled})</td></tr>
+      ${cancelRows}
+    </table>` : ''}
+
+    ${r.orders.length ? `
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#1a1a1a;border-radius:8px">
+      <tr><td colspan="5" style="padding:12px 16px 6px;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#888">Detalle de pedidos</td></tr>
+      ${orderRows}
+    </table>` : ''}
+  </td></tr>
+  <tr><td style="padding:16px 28px;border-top:1px solid rgba(255,255,255,.07);text-align:center;font-size:11px;color:rgba(245,240,230,.3)">
+    Reporte generado automáticamente por JuicySpot Admin
+  </td></tr>
+</table>
+</td></tr></table></body></html>`;
+}
+
+
+app.post('/api/shifts/close', requireAuth, async (req, res) => {
+  const { shift_date, shift_from, shift_to } = req.body;
+  if (!shift_date || !shift_from || !shift_to) return res.status(400).json({ error: 'Faltan datos del turno' });
+
+  const config    = db.getStoreConfig();
+  const report    = buildShiftReport(shift_date, shift_from, shift_to);
+  const localName = config.report_name   || 'The JuicySpot';
+  const emails    = config.report_emails || [];
+
+  const results = { emails: [] };
+
+  if (resend && emails.length) {
+    try {
+      await resend.emails.send({
+        from:    RESEND_FROM,
+        to:      emails,
+        subject: `${localName} — Cierre de turno ${shift_date.split('-').reverse().join('/')}`,
+        html:    buildEmailHtml(report, localName),
+      });
+      results.emails = emails;
+    } catch (e) {
+      console.error('Error enviando email:', e.message);
+      results.email_error = e.message;
+    }
+  }
+
+  const shift = db.saveShift({ ...report, report_sent_to: { emails } });
+  broadcast('shift_closed', { shiftId: shift.id });
+  res.json({ ok: true, shiftId: shift.id, results });
+});
+
+app.get('/api/shifts', requireSuperAdmin, (req, res) => {
+  res.json(db.getShifts());
+});
+
+app.post('/api/shifts/test-email', requireSuperAdmin, async (req, res) => {
+  if (!resend) return res.status(503).json({ error: 'RESEND_API_KEY no configurado' });
+  const config    = db.getStoreConfig();
+  const emails    = config.report_emails || [];
+  const localName = config.report_name  || 'The JuicySpot';
+  if (!emails.length) return res.status(400).json({ error: 'No hay emails configurados' });
+  try {
+    await resend.emails.send({
+      from:    RESEND_FROM,
+      to:      emails,
+      subject: `${localName} — Email de prueba ✅`,
+      html:    `<div style="font-family:Arial,sans-serif;background:#0e0a04;color:#f5f0e6;padding:32px;border-radius:10px;max-width:480px">
+        <div style="font-size:20px;font-weight:700;color:#D4920A;margin-bottom:12px">${localName}</div>
+        <p style="color:#aaa">Este es un email de prueba del sistema de reportes de cierre de turno.</p>
+        <p style="color:#aaa">Si recibiste este mensaje, la configuración de Resend está funcionando correctamente.</p>
+        <p style="color:#555;font-size:12px;margin-top:24px">Enviado desde JuicySpot Admin · ${new Date().toLocaleString('es-AR')}</p>
+      </div>`,
+    });
+    res.json({ ok: true, sent_to: emails });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/shifts/test-full', requireSuperAdmin, async (req, res) => {
+  const config    = db.getStoreConfig();
+  const localName = config.report_name   || 'The JuicySpot';
+  const emails    = config.report_emails || [];
+
+  const now = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  const fakeDate = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
+
+  const fakeReport = {
+    date: fakeDate, from: '18:00', to: '23:00',
+    total: 14, delivered: 12, cancelled: 2,
+    totalRevenue: 189986, avgTicket: 15832,
+    mpCount: 8, mpRevenue: 111992,
+    transferCount: 4, transferRevenue: 63996,
+    cancelReasons: { cliente_no_atendio: 1, pedido_erroneo: 1 },
+    avgDeliveryMinutes: 22,
+    topProducts: [
+      { emoji:'🍔', name:'Doble Lucy',          sub:'Combo',                    qty:9, revenue:179991 },
+      { emoji:'🧀', name:'Juicy Lucy',           sub:'Solo la burger',           qty:7, revenue:55993  },
+      { emoji:'🌿', name:'Capresa',              sub:'Combo',                    qty:5, revenue:74995  },
+      { emoji:'🎉', name:'Combo Familiar Lucy',  sub:'4 Juicy Lucy completas',   qty:3, revenue:149997 },
+      { emoji:'🍟', name:'Papas Adicionales',    sub:'Ración adicional',         qty:6, revenue:29400  },
+    ],
+    orders: [
+      { order_num:'#0041', client_name:'García Juan',      total:19999, status:'entregado', payment_method:'mp'       },
+      { order_num:'#0042', client_name:'López Ana',        total:13999, status:'entregado', payment_method:'transfer' },
+      { order_num:'#0043', client_name:'Martínez Pedro',   total:7999,  status:'entregado', payment_method:'mp'       },
+      { order_num:'#0044', client_name:'Rodríguez María',  total:19999, status:'entregado', payment_method:'transfer' },
+      { order_num:'#0045', client_name:'Fernández Luis',   total:15999, status:'entregado', payment_method:'mp'       },
+      { order_num:'#0046', client_name:'González Carmen',  total:13999, status:'cancelado', payment_method:'transfer' },
+      { order_num:'#0047', client_name:'Díaz Roberto',     total:11999, status:'entregado', payment_method:'mp'       },
+      { order_num:'#0048', client_name:'Torres Silvia',    total:19999, status:'entregado', payment_method:'mp'       },
+      { order_num:'#0049', client_name:'Ramírez Diego',    total:7999,  status:'entregado', payment_method:'transfer' },
+      { order_num:'#0050', client_name:'Morales Paula',    total:15999, status:'entregado', payment_method:'mp'       },
+      { order_num:'#0051', client_name:'Jiménez Andrés',   total:13999, status:'cancelado', payment_method:'mp'       },
+      { order_num:'#0052', client_name:'Reyes Natalia',    total:19999, status:'entregado', payment_method:'transfer' },
+      { order_num:'#0053', client_name:'Cruz Sebastián',   total:7999,  status:'entregado', payment_method:'mp'       },
+      { order_num:'#0054', client_name:'Vargas Valentina', total:15999, status:'entregado', payment_method:'mp'       },
+    ]
+  };
+
+  const results = { emails: [] };
+
+  if (resend && emails.length) {
+    try {
+      await resend.emails.send({
+        from:    RESEND_FROM,
+        to:      emails,
+        subject: `[PRUEBA] ${localName} — Cierre de turno ${fakeDate.split('-').reverse().join('/')}`,
+        html:    buildEmailHtml(fakeReport, localName),
+      });
+      results.emails = emails;
+    } catch (e) {
+      results.email_error = e.message;
+    }
+  } else if (!resend) {
+    results.email_error = 'RESEND_API_KEY no configurado';
+  }
+
+  res.json({ ok: true, results });
+});
+
+app.get('/api/shifts/:id', requireSuperAdmin, (req, res) => {
+  const shift = db.getShifts().find(s => s.id === parseInt(req.params.id));
+  if (!shift) return res.status(404).json({ error: 'Turno no encontrado' });
+  res.json(shift);
+});
+
+// ════════════════════════════════════════════════════════
 //  PEDIDOS
 // ════════════════════════════════════════════════════════
 
@@ -319,10 +604,11 @@ app.get('/api/orders', requireAuth, (req, res) => {
 });
 
 app.patch('/api/orders/:id/status', requireAuth, (req, res) => {
-  const VALID = ['recibido','pago_confirmado','en_preparacion','en_camino','entregado'];
-  const { status } = req.body;
+  const VALID = ['recibido','pago_confirmado','en_preparacion','en_camino','entregado','cancelado'];
+  const { status, cancel_reason, cancel_notes } = req.body;
   if (!VALID.includes(status)) return res.status(400).json({ error: 'Estado inválido' });
-  const order = db.updateStatus(parseInt(req.params.id), status);
+  if (status === 'cancelado' && !cancel_reason) return res.status(400).json({ error: 'Motivo de cancelación requerido' });
+  const order = db.updateStatus(parseInt(req.params.id), status, null, null, { cancel_reason, cancel_notes });
   if (!order) return res.status(404).json({ error: 'Pedido no encontrado' });
   broadcast('status_update', order);
   res.json(order);

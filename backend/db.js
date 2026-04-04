@@ -42,10 +42,20 @@ function load() {
       if (!data.users)  data.users  = [];
       if (!data.store)  data.store  = { manualOverride: 'auto', schedule: DEFAULT_SCHEDULE };
       if (!data.prices) data.prices = {};
+      if (!data.shifts) data.shifts = [];
+      if (!data.store.report_emails) data.store.report_emails = ['eduardocanelo@gmail.com'];
+      if (!data.store.report_name)   data.store.report_name   = 'The JuicySpot';
       return data;
     }
   } catch (e) { console.error('Error leyendo DB:', e.message); }
-  return { orders: [], nextId: 1, users: [], store: { manualOverride: 'auto', schedule: DEFAULT_SCHEDULE }, prices: {}, catalog: null };
+  return {
+    orders: [], nextId: 1, users: [], shifts: [],
+    store: {
+      manualOverride: 'auto', schedule: DEFAULT_SCHEDULE,
+      report_emails: ['eduardocanelo@gmail.com'], report_name: 'The JuicySpot'
+    },
+    prices: {}, catalog: null
+  };
 }
 
 // ── Catalog ───────────────────────────────────────────
@@ -208,7 +218,7 @@ function resetOrders() {
   save(db);
 }
 
-function updateStatus(id, status, _paidAt, _mpPaymentId) {
+function updateStatus(id, status, _paidAt, _mpPaymentId, cancelData) {
   const db  = load();
   const idx = db.orders.findIndex(o => o.id === id);
   if (idx === -1) return null;
@@ -217,6 +227,11 @@ function updateStatus(id, status, _paidAt, _mpPaymentId) {
   if (status === 'pago_confirmado') {
     db.orders[idx].paid_at       = _paidAt || nowStr();
     db.orders[idx].mp_payment_id = _mpPaymentId || null;
+  }
+  if (status === 'cancelado' && cancelData) {
+    db.orders[idx].cancel_reason = cancelData.cancel_reason || null;
+    db.orders[idx].cancel_notes  = cancelData.cancel_notes  || null;
+    db.orders[idx].cancelled_at  = nowStr();
   }
   save(db);
   return db.orders[idx];
@@ -308,10 +323,28 @@ function getMetrics(from, to) {
            avgDeliveryMinutes, mpRevenue, mpCount, pendingShipments };
 }
 
+// ── Turnos ─────────────────────────���──────────────────
+function getShifts() {
+  const data = load();
+  return (data.shifts || []).slice().sort((a, b) => b.id - a.id);
+}
+
+function saveShift(shiftData) {
+  const data = load();
+  if (!data.shifts) data.shifts = [];
+  const id = data.shifts.length ? Math.max(...data.shifts.map(s => s.id)) + 1 : 1;
+  const shift = { id, closed_at: nowStr(), ...shiftData };
+  data.shifts.unshift(shift);
+  save(data);
+  return shift;
+}
+
 module.exports = {
   createOrder, getOrders, resetOrders, updateStatus, getMetrics,
   getUser, upsertUser, approveUser, getPendingUsers, getAllUsers,
   getStoreConfig, updateStoreConfig,
   getCatalog, addCatalogItem, updateCatalogItem, deleteCatalogItem,
   getPrices, updatePrices,
+  getShifts, saveShift,
+  parseDateTime,
 };

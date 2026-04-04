@@ -65,39 +65,47 @@ test('el total del carrito se calcula correctamente', async ({ page }) => {
 });
 
 // ── Formulario de pedido ─────────────────────────────
-// Llama sendOrder() directamente via evaluate para saltear el estado abierto/cerrado
-test('muestra error si el carrito está vacío al enviar', async ({ page }) => {
-  const dialog = page.waitForEvent('dialog');
-  await page.evaluate(() => sendOrder());
-  const d = await dialog;
-  expect(d.message()).toMatch(/vacío|carrito/i);
-  await d.dismiss();
-});
+// Las validaciones usan feedback visual (borde rojo), no alert()
 
-test('muestra error si falta el nombre al enviar', async ({ page }) => {
+test('falta nombre: pone borde rojo en el input', async ({ page }) => {
   await page.locator('#cartFloat').click();
   await page.locator('#tabAgregar').click();
   await page.waitForTimeout(300);
   await page.locator('#quickBurgers button').first().click();
-  const dialog = page.waitForEvent('dialog');
+  // No llenar nombre
   await page.evaluate(() => sendOrder());
-  const d = await dialog;
-  expect(d.message()).toMatch(/nombre/i);
-  await d.dismiss();
+  await page.waitForTimeout(200);
+  const placeholder = await page.locator('#clientName').getAttribute('placeholder');
+  expect(placeholder).toMatch(/nombre|⚠/i);
 });
 
-test('muestra error si no se elige forma de pago', async ({ page }) => {
+test('falta forma de pago: resalta el selector', async ({ page }) => {
   await page.locator('#cartFloat').click();
   await page.locator('#tabAgregar').click();
   await page.waitForTimeout(300);
   await page.locator('#quickBurgers button').first().click();
   await page.locator('#clientName').fill('Test Usuario');
   await page.locator('#clientAddress').fill('Av. Corrientes 1234');
-  const dialog = page.waitForEvent('dialog');
+  // No elegir forma de pago
   await page.evaluate(() => sendOrder());
-  const d = await dialog;
-  expect(d.message()).toMatch(/pago|método/i);
-  await d.dismiss();
+  await page.waitForTimeout(200);
+  const outline = await page.locator('#payOptMP').evaluate(el => el.parentElement.style.outline);
+  expect(outline).toMatch(/red|var\(--red\)/i);
+});
+
+test('carrito vacío: muestra alert', async ({ page }) => {
+  // Pre-rellenar nombre, dirección y pago para llegar al chequeo del carrito
+  await page.evaluate(() => {
+    window._alerts = [];
+    window.alert = msg => window._alerts.push(String(msg));
+    document.getElementById('clientName').value = 'Test';
+    document.getElementById('clientAddress').value = 'Calle 123';
+    selectPayment('transfer');
+    sendOrder();
+  });
+  await page.waitForTimeout(300);
+  const alerts = await page.evaluate(() => window._alerts);
+  expect(alerts[0]).toMatch(/vacío|carrito/i);
 });
 
 test('los botones de pago MP y Transferencia son seleccionables', async ({ page }) => {
