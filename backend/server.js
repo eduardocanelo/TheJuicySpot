@@ -400,8 +400,9 @@ app.post('/api/orders/:id/payment', async (req, res) => {
 
     res.json({ init_point: result.init_point, sandbox_init_point: result.sandbox_init_point });
   } catch (e) {
-    console.error('[MP preference error]', e.message);
-    res.status(500).json({ error: 'Error al crear preferencia de pago' });
+    const detail = e?.cause?.message || e?.message || String(e);
+    console.error('[MP preference error]', detail);
+    res.status(500).json({ error: 'Error al crear preferencia de pago', detail });
   }
 });
 

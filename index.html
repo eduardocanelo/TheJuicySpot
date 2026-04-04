@@ -2012,7 +2012,7 @@ async function payWithMP(){
     if(data.init_point){
       window.location.href = data.init_point;
     } else {
-      throw new Error(`HTTP ${resp.status}: ${data.error || 'Sin link de pago'}`);
+      throw new Error(`HTTP ${resp.status}: ${data.error || 'Sin link de pago'}${data.detail ? ' — ' + data.detail : ''}`);
     }
   } catch(e){
     errEl.textContent = 'Error: ' + e.message;
