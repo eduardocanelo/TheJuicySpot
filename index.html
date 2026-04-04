@@ -1927,7 +1927,6 @@ async function sendOrder(){
   let msg=`🍔 *PEDIDO ${fmtOrderNum(orderNum)} – Juicy Spot*\n`;
   msg+=`📅 ${date}\n`;
   msg+=`👤 *Cliente:* ${name}\n`;
-  msg+=`📱 *Tel:* ${phone}\n`;
   if(address) msg+=`📍 *Dirección:* ${address}\n`;
   msg+=`\n*─────────────────*\n*DETALLE:*\n`;
   cart.forEach(c=>{
