@@ -61,11 +61,20 @@ app.use('/api/webhooks/mercadopago', express.raw({ type: 'application/json', lim
 app.use(express.json({ limit: '50kb' }));
 
 // ── Static ───────────────────────────────────────────────
-app.use(express.static(path.join(__dirname, '..')));
-app.use('/admin', express.static(path.join(__dirname, '../admin')));
+// index.html: nunca cacheado (siempre la versión más nueva)
 app.get('/', (req, res) => {
-  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
   res.sendFile(path.join(__dirname, '../index.html'));
+});
+app.use(express.static(path.join(__dirname, '..'), { index: false }));
+app.use('/admin', express.static(path.join(__dirname, '../admin'), { index: false }));
+app.get('/admin', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+  res.sendFile(path.join(__dirname, '../admin/index.html'));
+});
+app.get('/admin/', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+  res.sendFile(path.join(__dirname, '../admin/index.html'));
 });
 
 // API responses never cached by Cloudflare
