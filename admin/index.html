@@ -1328,6 +1328,8 @@ function startApp() {
   // Verificar fin de turno cada 60 segundos
   checkShiftEnd();
   setInterval(checkShiftEnd, 60000);
+  // Actualizar timers cada minuto
+  setInterval(() => renderKanban(), 60000);
 }
 
 window.addEventListener('DOMContentLoaded', () => {
