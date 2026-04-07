@@ -238,9 +238,9 @@ header {
   transition: box-shadow .2s;
 }
 .card-timer {
-  position: absolute; top: 10px; right: 10px;
   font-size: 11px; font-weight: 700; letter-spacing: .5px;
   padding: 3px 8px; border-radius: 20px; font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .timer-ok  { background: rgba(58,158,95,.18);  color: #3A9E5F; border: 1px solid rgba(58,158,95,.35); }
 .timer-mid { background: rgba(224,122,47,.18); color: #E07A2F; border: 1px solid rgba(224,122,47,.35); }
@@ -1460,9 +1460,9 @@ function renderCard(o, color, flash) {
 
   return `
   <div class="card${flash?' new-flash':''}" id="card-${o.id}">
-    ${timerHTML}
     <div class="card-top">
       <span class="card-num">${o.order_num}</span>
+      ${timerHTML}
     </div>
     <div class="card-client">${esc(o.client_name)}</div>
     ${o.client_phone ? '<div class="card-phone">📱 ' + esc(o.client_phone) + '</div>' : ''}
