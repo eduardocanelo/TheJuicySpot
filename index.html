@@ -1416,7 +1416,7 @@ function showTab(id, btn) {
       color:var(--white);font-family:'Barlow',sans-serif;font-size:14px;
       padding:10px 14px;border-radius:2px;margin-bottom:8px;outline:none;
     " onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor='rgba(212,146,10,.2)'">
-    <input id="clientPhone" placeholder="Tu teléfono (opcional)" type="tel" style="
+    <input id="clientPhone" placeholder="Tu teléfono *" type="tel" style="
       width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(212,146,10,.2);
       color:var(--white);font-family:'Barlow',sans-serif;font-size:14px;
       padding:10px 14px;border-radius:2px;margin-bottom:8px;outline:none;
@@ -1928,8 +1928,15 @@ async function sendOrder(){
   const address= (_selectedAddress||_inp?.value||'').trim();
   const pm     = _paymentMethod;
 
+  const phoneEl = document.getElementById('clientPhone');
+  const phone   = phoneEl?.value?.trim() || '';
+
   if(!name){
     if(nameEl){ nameEl.style.borderColor='var(--red)'; nameEl.placeholder='⚠ Ingresá tu nombre'; nameEl.focus(); }
+    return;
+  }
+  if(!phone){
+    if(phoneEl){ phoneEl.style.borderColor='var(--red)'; phoneEl.placeholder='⚠ Ingresá tu teléfono'; phoneEl.focus(); }
     return;
   }
   if(!address){
@@ -1976,7 +1983,7 @@ async function sendOrder(){
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         order_num: fmtOrderNum(orderNum), client_name: name,
-        client_phone: (document.getElementById('clientPhone')?.value?.trim() || ''), client_address: address,
+        client_phone: phone, client_address: address,
         items: cart, total, whatsapp_msg: msg, payment_method: pm
       })
     });
