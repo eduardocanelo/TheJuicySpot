@@ -1416,6 +1416,11 @@ function showTab(id, btn) {
       color:var(--white);font-family:'Barlow',sans-serif;font-size:14px;
       padding:10px 14px;border-radius:2px;margin-bottom:8px;outline:none;
     " onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor='rgba(212,146,10,.2)'">
+    <input id="clientPhone" placeholder="Tu teléfono (opcional)" type="tel" style="
+      width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(212,146,10,.2);
+      color:var(--white);font-family:'Barlow',sans-serif;font-size:14px;
+      padding:10px 14px;border-radius:2px;margin-bottom:8px;outline:none;
+    " onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor='rgba(212,146,10,.2)'">
 
     <input id="clientAddress" placeholder="Dirección de entrega *" autocomplete="off" style="
       width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(212,146,10,.2);
@@ -1971,7 +1976,7 @@ async function sendOrder(){
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         order_num: fmtOrderNum(orderNum), client_name: name,
-        client_phone: '', client_address: address,
+        client_phone: (document.getElementById('clientPhone')?.value?.trim() || ''), client_address: address,
         items: cart, total, whatsapp_msg: msg, payment_method: pm
       })
     });

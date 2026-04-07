@@ -3011,8 +3011,9 @@ function confirmCancel() {
     return;
   }
   const notes  = document.getElementById('cancelNotes').value.trim();
+  const cancelId = _cancelTargetId;
   closeCancelModal();
-  setStatus(_cancelTargetId, 'cancelado', { reason, notes });
+  setStatus(cancelId, 'cancelado', { reason, notes });
 }
 
 function setStatus(id, status, cancelData) {
@@ -3271,11 +3272,14 @@ function fmtDate(iso) {
   return `${d} ${months[+m]} ${y}`;
 }
 function parseDateAR(str) {
-  // "03/04/2026, 18:05:00" → timestamp ms
+  // Handles "03/04/2026, 18:05:00" (24h) y "03/04/2026, 03:36:01 p. m." (12h es-AR)
   if (!str) return null;
-  const m = str.match(/(\d{2})\/(\d{2})\/(\d{4}),?\s*(\d{2}):(\d{2}):(\d{2})/);
+  const m = str.match(/(d{2})/(d{2})/(d{4}),?s*(d{2}):(d{2}):(d{2})/);
   if (!m) return null;
-  return new Date(+m[3], +m[2]-1, +m[1], +m[4], +m[5], +m[6]).getTime();
+  let h = +m[4];
+  if (/p.?s*m.?/i.test(str) && h < 12) h += 12;
+  if (/a.?s*m.?/i.test(str) && h === 12) h = 0;
+  return new Date(+m[3], +m[2]-1, +m[1], h, +m[5], +m[6]).getTime();
 }
 function timeAgo(isoStr) {
   const diff = Math.floor((Date.now() - new Date(isoStr).getTime()) / 1000);
