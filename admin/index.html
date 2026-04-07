@@ -1437,7 +1437,7 @@ function renderCard(o, color, flash) {
   const waMsg = encodeURIComponent(
     `Hola ${o.client_name}! Tu pedido ${o.order_num} ya está en camino 🛵🍔\n¡Ya llegamos pronto!`
   );
-  const waPhone = o.client_phone.replace(/\D/g,'');
+  const waPhone = (o.client_phone || '').replace(/\D/g,'');
 
   // Timer desde recepción → entrega (o hasta ahora si sigue activo)
   let timerHTML = '';
