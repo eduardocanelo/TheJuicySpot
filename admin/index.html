@@ -2267,8 +2267,15 @@ function openPOS() {
     b.style.color      = 'rgba(245,240,230,.5)';
     b.style.border     = '1px solid rgba(255,255,255,.1)';
   });
-  renderPOSItems();
   document.getElementById('posModal').style.display = 'block';
+  if (!_catalog || !_catalog.length) {
+    fetch(API + '/api/catalog/all', { headers: apiHeaders() })
+      .then(r => r.json())
+      .then(data => { _catalog = data; renderPOSItems(); })
+      .catch(() => showToast('Error al cargar productos'));
+  } else {
+    renderPOSItems();
+  }
 }
 
 function closePOS() {
