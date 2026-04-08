@@ -1371,6 +1371,8 @@ function startApp() {
   connectSSE();
   loadMetrics();
   loadStoreStatus();
+  // Pre-cargar catálogo para que el POS esté listo de inmediato
+  fetch(API + '/api/catalog').then(r => r.json()).then(data => { _catalog = data; }).catch(() => {});
   // Verificar fin de turno cada 60 segundos
   checkShiftEnd();
   setInterval(checkShiftEnd, 60000);
