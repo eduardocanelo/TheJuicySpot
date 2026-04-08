@@ -1,7 +1,7 @@
 // Service Worker — JuicySpot PWA
 // Solo habilita la instalación. No cachea la API para no romper SSE ni datos en tiempo real.
 
-const CACHE_NAME = 'juicyspot-v1';
+const CACHE_NAME = 'juicyspot-v2';
 const STATIC = [
   '/',
   '/index.html',
