@@ -1371,8 +1371,6 @@ function startApp() {
   connectSSE();
   loadMetrics();
   loadStoreStatus();
-  // Pre-cargar catálogo para que el POS esté listo de inmediato
-  fetch(API + '/api/catalog').then(r => r.json()).then(data => { _catalog = data; }).catch(() => {});
   // Verificar fin de turno cada 60 segundos
   checkShiftEnd();
   setInterval(checkShiftEnd, 60000);
@@ -2253,9 +2251,8 @@ function closeShiftDetailModal() {
 // ══════════════════════════════════════════════════════════
 //  POS — Pedidos de salón
 // ══════════════════════════════════════════════════════════
-let _posPayment  = null;
-let _posQtys     = {};   // { item.id: qty }
-let _posLoading  = false;
+let _posPayment = null;
+let _posQtys    = {};
 
 function openPOS() {
   _posPayment = null;
@@ -2271,33 +2268,21 @@ function openPOS() {
     b.style.border     = '1px solid rgba(255,255,255,.1)';
   });
   document.getElementById('posModal').style.display = 'block';
-  if (_catalog && _catalog.length) {
-    renderPOSItems();
-  } else {
-    _loadPOSCatalog();
-  }
+  _loadPOSCatalog();
 }
 
 function _loadPOSCatalog() {
-  if (_posLoading) return;
-  _posLoading = true;
   const container = document.getElementById('posItems');
-  container.innerHTML = '<div style="padding:12px;color:rgba(245,240,230,.3);font-size:13px;text-align:center;">Cargando catálogo...</div>';
-  fetch(API + '/api/catalog')
-    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+  if (_catalog && _catalog.length) { renderPOSItems(); return; }
+  container.innerHTML = '<div style="padding:12px;color:rgba(245,240,230,.3);font-size:13px;text-align:center;">Cargando...</div>';
+  fetch('/api/catalog')
+    .then(r => r.json())
     .then(data => {
-      _posLoading = false;
-      if (!Array.isArray(data) || !data.length) {
-        container.innerHTML = '<div style="padding:12px;color:#e05252;font-size:13px;text-align:center;">Sin productos activos.<br><button onclick="_loadPOSCatalog()" style="margin-top:8px;background:rgba(212,146,10,.2);border:1px solid var(--gold);color:var(--gold);padding:5px 12px;border-radius:4px;cursor:pointer;">Reintentar</button></div>';
-        return;
-      }
-      _catalog = data;
+      _catalog = Array.isArray(data) ? data : [];
       renderPOSItems();
     })
-    .catch(e => {
-      _posLoading = false;
-      const container2 = document.getElementById('posItems');
-      if (container2) container2.innerHTML = '<div style="padding:12px;color:#e05252;font-size:13px;text-align:center;">Error al cargar.<br><button onclick="_loadPOSCatalog()" style="margin-top:8px;background:rgba(212,146,10,.2);border:1px solid var(--gold);color:var(--gold);padding:5px 12px;border-radius:4px;cursor:pointer;">Reintentar</button></div>';
+    .catch(() => {
+      container.innerHTML = '<div style="padding:12px;color:#e05252;font-size:13px;text-align:center;">Error al cargar.<br><button onclick="_loadPOSCatalog()" style="margin-top:8px;background:rgba(212,146,10,.2);border:1px solid var(--gold);color:var(--gold);padding:5px 12px;border-radius:4px;cursor:pointer;">Reintentar</button></div>';
     });
 }
 
