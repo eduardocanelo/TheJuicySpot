@@ -970,7 +970,7 @@ function submitNewProduct() {
       </div>
       <div style="display:flex;gap:8px;margin-bottom:10px;">
         <input id="posPhone" placeholder="Teléfono (opcional)" type="tel" style="flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(212,146,10,.2);color:var(--cream);font-family:'Barlow',sans-serif;font-size:14px;padding:10px 14px;border-radius:4px;outline:none;" onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor='rgba(212,146,10,.2)'">
-        <input id="posAddress" placeholder="Mesa / Mostrador" style="flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(212,146,10,.2);color:var(--cream);font-family:'Barlow',sans-serif;font-size:14px;padding:10px 14px;border-radius:4px;outline:none;" onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor='rgba(212,146,10,.2)'">
+        <input id="posAddress" placeholder="Dirección de entrega *" style="flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(212,146,10,.2);color:var(--cream);font-family:'Barlow',sans-serif;font-size:14px;padding:10px 14px;border-radius:4px;outline:none;" onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor='rgba(212,146,10,.2)'">
       </div>
 
       <!-- Productos -->
@@ -2342,12 +2342,19 @@ function updatePOSTotal() {
 async function submitPOS() {
   const name = document.getElementById('posName').value.trim();
   const phone = document.getElementById('posPhone').value.trim();
-  const address = document.getElementById('posAddress').value.trim() || 'Salón';
+  const address = document.getElementById('posAddress').value.trim();
 
   if (!name) {
     const el = document.getElementById('posName');
     el.style.borderColor = 'var(--red)';
     el.placeholder = '⚠ Ingresá el nombre';
+    el.focus();
+    return;
+  }
+  if (!address) {
+    const el = document.getElementById('posAddress');
+    el.style.borderColor = 'var(--red)';
+    el.placeholder = '⚠ Ingresá la dirección';
     el.focus();
     return;
   }
