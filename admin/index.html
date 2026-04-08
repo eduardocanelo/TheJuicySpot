@@ -945,6 +945,52 @@ function submitNewProduct() {
     <div id="kanbanView">
       <!-- columnas generadas por JS -->
     </div>
+
+    <!-- Botón flotante POS -->
+    <button onclick="openPOS()" style="
+      position:fixed;bottom:80px;right:20px;z-index:200;
+      width:52px;height:52px;border-radius:50%;border:none;cursor:pointer;
+      background:#D4920A;color:#1a1008;font-size:26px;font-weight:700;
+      box-shadow:0 4px 16px rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;
+      transition:transform .15s;
+    " onmouseenter="this.style.transform='scale(1.08)'" onmouseleave="this.style.transform='scale(1)'">+</button>
+  </div>
+
+  <!-- ═══ MODAL POS ═══ -->
+  <div id="posModal" style="display:none;position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.75);overflow-y:auto;padding:20px;">
+    <div style="max-width:480px;margin:0 auto;background:#1e1408;border:1px solid rgba(212,146,10,.2);border-radius:8px;padding:24px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+        <span style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--gold);letter-spacing:2px;">🏠 Nuevo Pedido — Salón</span>
+        <button onclick="closePOS()" style="background:none;border:none;color:rgba(245,240,230,.4);font-size:22px;cursor:pointer;">✕</button>
+      </div>
+
+      <!-- Cliente -->
+      <div style="margin-bottom:10px;">
+        <input id="posName" placeholder="Nombre del cliente *" style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(212,146,10,.2);color:var(--cream);font-family:'Barlow',sans-serif;font-size:14px;padding:10px 14px;border-radius:4px;outline:none;box-sizing:border-box;" onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor='rgba(212,146,10,.2)'">
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:10px;">
+        <input id="posPhone" placeholder="Teléfono (opcional)" type="tel" style="flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(212,146,10,.2);color:var(--cream);font-family:'Barlow',sans-serif;font-size:14px;padding:10px 14px;border-radius:4px;outline:none;" onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor='rgba(212,146,10,.2)'">
+        <input id="posAddress" placeholder="Mesa / Mostrador" style="flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(212,146,10,.2);color:var(--cream);font-family:'Barlow',sans-serif;font-size:14px;padding:10px 14px;border-radius:4px;outline:none;" onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor='rgba(212,146,10,.2)'">
+      </div>
+
+      <!-- Productos -->
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:rgba(245,240,230,.4);margin-bottom:8px;">Productos</div>
+      <div id="posItems" style="max-height:280px;overflow-y:auto;border:1px solid rgba(255,255,255,.08);border-radius:4px;padding:4px;margin-bottom:14px;"></div>
+
+      <!-- Pago -->
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:rgba(245,240,230,.4);margin-bottom:8px;">Forma de pago *</div>
+      <div style="display:flex;gap:6px;margin-bottom:18px;">
+        <button id="posPayEfectivo" onclick="selectPOSPayment('efectivo')" style="flex:1;padding:9px 4px;border-radius:3px;border:1px solid rgba(255,255,255,.1);background:transparent;color:rgba(245,240,230,.5);cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;transition:all .2s;">💵 Efectivo</button>
+        <button id="posPayTransfer" onclick="selectPOSPayment('transfer')" style="flex:1;padding:9px 4px;border-radius:3px;border:1px solid rgba(255,255,255,.1);background:transparent;color:rgba(245,240,230,.5);cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;transition:all .2s;">🏦 Transferencia</button>
+        <button id="posPayMP" onclick="selectPOSPayment('mp')" style="flex:1;padding:9px 4px;border-radius:3px;border:1px solid rgba(255,255,255,.1);background:transparent;color:rgba(245,240,230,.5);cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;transition:all .2s;">🔵 MP</button>
+      </div>
+
+      <!-- Total + Confirmar -->
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:26px;color:var(--gold);" id="posTotalDisplay">$ 0</div>
+        <button onclick="submitPOS()" style="flex:1;background:#D4920A;color:#1a1008;border:none;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;letter-spacing:2px;text-transform:uppercase;padding:13px;border-radius:4px;">Crear Pedido</button>
+      </div>
+    </div>
   </div>
 
 
@@ -1469,8 +1515,11 @@ function renderCard(o, color, flash) {
     ${o.client_address ? `<div class="card-address">📍 ${esc(o.client_address)}</div>` : ''}
     <div class="card-items">${esc(itemsText)}</div>
     <div class="card-total">${fmtPesos(o.total)}</div>
-    <div style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-top:4px;padding:3px 7px;border-radius:3px;display:inline-block;${o.payment_method==='transfer'?'background:rgba(212,146,10,.15);color:#D4920A;':'background:rgba(0,158,227,.12);color:#009ee3;'}">
-      ${o.payment_method==='transfer'?'🏦 Transferencia':'🔵 Mercado Pago'}
+    <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:4px;">
+      <span style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:3px 7px;border-radius:3px;${o.payment_method==='transfer'?'background:rgba(212,146,10,.15);color:#D4920A;':o.payment_method==='efectivo'?'background:rgba(58,158,95,.15);color:#3A9E5F;':'background:rgba(0,158,227,.12);color:#009ee3;'}">
+        ${o.payment_method==='transfer'?'🏦 Transferencia':o.payment_method==='efectivo'?'💵 Efectivo':'🔵 Mercado Pago'}
+      </span>
+      ${o.source==='salon'?'<span style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:3px 7px;border-radius:3px;background:rgba(138,43,226,.15);color:#b06ae0;border:1px solid rgba(138,43,226,.25);">🏠 Salón</span>':'<span style="font-size:11px;letter-spacing:1px;text-transform:uppercase;padding:3px 7px;border-radius:3px;background:rgba(255,255,255,.05);color:rgba(245,240,230,.3);">🌐 Web</span>'}
     </div>
     ${o.status === 'cancelado' && o.cancel_reason ? `
     <div style="margin-top:8px;padding:7px 9px;background:rgba(192,57,43,.1);border:1px solid rgba(192,57,43,.25);border-radius:5px;font-size:.78rem;color:#e07070;">
@@ -2197,6 +2246,134 @@ function viewShift(id) {
 }
 function closeShiftDetailModal() {
   document.getElementById('shiftDetailModal').style.display = 'none';
+}
+
+// ══════════════════════════════════════════════════════════
+//  POS — Pedidos de salón
+// ══════════════════════════════════════════════════════════
+let _posPayment = null;
+let _posQtys    = {};   // { itemKey: qty }
+
+function openPOS() {
+  _posPayment = null;
+  _posQtys    = {};
+  document.getElementById('posName').value    = '';
+  document.getElementById('posPhone').value   = '';
+  document.getElementById('posAddress').value = '';
+  document.getElementById('posTotalDisplay').textContent = '$ 0';
+  ['posPayEfectivo','posPayTransfer','posPayMP'].forEach(id => {
+    const b = document.getElementById(id);
+    b.style.background = 'transparent';
+    b.style.color      = 'rgba(245,240,230,.5)';
+    b.style.border     = '1px solid rgba(255,255,255,.1)';
+  });
+  renderPOSItems();
+  document.getElementById('posModal').style.display = 'block';
+}
+
+function closePOS() {
+  document.getElementById('posModal').style.display = 'none';
+}
+
+function selectPOSPayment(method) {
+  _posPayment = method;
+  const map = { efectivo:'posPayEfectivo', transfer:'posPayTransfer', mp:'posPayMP' };
+  Object.entries(map).forEach(([m, id]) => {
+    const b = document.getElementById(id);
+    if (m === method) {
+      b.style.background = 'rgba(212,146,10,.2)';
+      b.style.color      = 'var(--gold)';
+      b.style.border     = '1px solid rgba(212,146,10,.5)';
+    } else {
+      b.style.background = 'transparent';
+      b.style.color      = 'rgba(245,240,230,.5)';
+      b.style.border     = '1px solid rgba(255,255,255,.1)';
+    }
+  });
+}
+
+function renderPOSItems() {
+  const container = document.getElementById('posItems');
+  if (!_catalog || !_catalog.length) {
+    container.innerHTML = '<div style="padding:12px;color:rgba(245,240,230,.3);font-size:13px;text-align:center;">Cargando catálogo...</div>';
+    return;
+  }
+  const active = _catalog.filter(p => p.active !== false);
+  container.innerHTML = active.map(p => {
+    const qty = _posQtys[p.key] || 0;
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;border-bottom:1px solid rgba(255,255,255,.05);">
+      <div>
+        <div style="font-size:13px;color:var(--cream);">${esc(p.name)}</div>
+        <div style="font-size:11px;color:rgba(245,240,230,.4);">${fmtPesos(p.price)}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button onclick="changePOSQty('${p.key}', -1)" style="width:28px;height:28px;border-radius:50%;border:1px solid rgba(255,255,255,.15);background:transparent;color:var(--cream);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;">−</button>
+        <span style="min-width:20px;text-align:center;font-family:'Bebas Neue',sans-serif;font-size:18px;color:var(--gold);">${qty}</span>
+        <button onclick="changePOSQty('${p.key}', 1)" style="width:28px;height:28px;border-radius:50%;border:1px solid rgba(255,255,255,.15);background:transparent;color:var(--cream);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;">+</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function changePOSQty(key, delta) {
+  const current = _posQtys[key] || 0;
+  const next    = Math.max(0, current + delta);
+  if (next === 0) delete _posQtys[key]; else _posQtys[key] = next;
+  renderPOSItems();
+  updatePOSTotal();
+}
+
+function updatePOSTotal() {
+  const prices = {};
+  (_catalog || []).forEach(p => { prices[p.key] = p.price; });
+  const total = Object.entries(_posQtys).reduce((sum, [key, qty]) => {
+    return sum + (prices[key] || 0) * qty;
+  }, 0);
+  document.getElementById('posTotalDisplay').textContent = fmtPesos(total);
+}
+
+async function submitPOS() {
+  const name = document.getElementById('posName').value.trim();
+  const phone = document.getElementById('posPhone').value.trim();
+  const address = document.getElementById('posAddress').value.trim() || 'Salón';
+
+  if (!name) {
+    const el = document.getElementById('posName');
+    el.style.borderColor = 'var(--red)';
+    el.placeholder = '⚠ Ingresá el nombre';
+    el.focus();
+    return;
+  }
+  const items = (_catalog || [])
+    .filter(p => _posQtys[p.key])
+    .map(p => ({ key: p.key, name: p.name, qty: _posQtys[p.key], unitPrice: p.price, sub: p.group || '', drinkSummary: '' }));
+
+  if (!items.length) { showToast('Agregá al menos un producto'); return; }
+  if (!_posPayment)  { showToast('Seleccioná una forma de pago'); return; }
+
+  const btn = document.querySelector('#posModal button[onclick="submitPOS()"]');
+  btn.textContent = 'Creando...';
+  btn.disabled = true;
+
+  try {
+    const r = await fetch(`${API}/api/orders/pos`, {
+      method: 'POST',
+      headers: apiHeaders(),
+      body: JSON.stringify({ client_name: name, client_phone: phone, client_address: address, items, payment_method: _posPayment })
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || r.status);
+    orders.unshift(data.order);
+    renderKanban();
+    closePOS();
+    showToast('Pedido creado');
+    setTimeout(() => printComanda(data.order.id), 300);
+  } catch (e) {
+    showToast('Error: ' + e.message);
+  } finally {
+    btn.textContent = 'Crear Pedido';
+    btn.disabled = false;
+  }
 }
 
 </script>

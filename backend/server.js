@@ -594,6 +594,39 @@ app.post('/api/orders', orderLimiter, async (req, res) => {
   }
 });
 
+app.post('/api/orders/pos', requireAuth, async (req, res) => {
+  const { client_name, client_phone, client_address, items, payment_method } = req.body;
+
+  const name     = sanitizeString(client_name, 100);
+  const phone    = sanitizeString(client_phone, 20);
+  const address  = sanitizeString(client_address, 300);
+  const payMethod = ['mp','transfer','efectivo'].includes(payment_method) ? payment_method : 'efectivo';
+
+  if (!name) return res.status(400).json({ error: 'Nombre requerido' });
+  if (!Array.isArray(items) || !items.length || items.length > 50)
+    return res.status(400).json({ error: 'Items inválidos' });
+
+  const total = await calcOrderTotal(items);
+  if (total <= 0) return res.status(400).json({ error: 'Ningún item tiene precio válido' });
+
+  try {
+    const order = await db.createOrder({
+      client_name:    name,
+      client_phone:   phone ? normalizePhone(phone) : '',
+      client_address: address || 'Salón',
+      items_json:     JSON.stringify(items),
+      total,
+      payment_method: payMethod,
+      source:         'salon'
+    });
+    broadcast('new_order', order);
+    res.json({ ok: true, order });
+  } catch (e) {
+    console.error('Error al guardar pedido POS:', e.message);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
 app.get('/api/orders', requireAuth, async (req, res) => {
   res.json(await db.getOrders());
 });

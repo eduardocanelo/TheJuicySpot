@@ -167,9 +167,10 @@ async function createOrder(data) {
   });
 
   const now = nowStr();
+  const autoNum = '#' + String(orderId).padStart(4, '0');
   const order = {
     id:             orderId,
-    order_num:      data.order_num,
+    order_num:      data.order_num || autoNum,
     client_name:    data.client_name,
     client_phone:   data.client_phone,
     client_address: data.client_address || '',
@@ -180,6 +181,7 @@ async function createOrder(data) {
     paid_at:        null,
     mp_payment_id:  null,
     whatsapp_msg:   data.whatsapp_msg || '',
+    source:         data.source || 'web',
     created_at:     data._created_at || now,
     updated_at:     now,
     cancel_reason:  null,
