@@ -2269,7 +2269,7 @@ function openPOS() {
   });
   document.getElementById('posModal').style.display = 'block';
   if (!_catalog || !_catalog.length) {
-    fetch(API + '/api/catalog/all', { headers: apiHeaders() })
+    fetch(API + '/api/catalog')
       .then(r => r.json())
       .then(data => { _catalog = data; renderPOSItems(); })
       .catch(() => showToast('Error al cargar productos'));
